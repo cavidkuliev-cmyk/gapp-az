@@ -1,0 +1,15 @@
+{% for s in feed %}
+<a class="row" href="{{ story_path(s) }}">
+<time datetime="{{ s.last_at | baku_iso }}">{{ s.last_at | short_time }}</time>
+<span><span class="t">{{ s.title }}</span>
+<span class="muted">{{ s.main_source }}{% if s.source_count > 1 %} · ещё {{ (s.source_count - 1) | sources_label }}{% endif %}</span></span>
+</a>
+{% else %}
+<p class="muted">Пока здесь нет новостей.</p>
+{% endfor %}
+{% if page > 1 or has_next %}
+<nav class="pager" aria-label="Страницы">
+{% if page > 1 %}<a class="btn" rel="prev" href="{{ base_path }}{% if page > 2 %}?page={{ page - 1 }}{% endif %}">Новее</a>{% endif %}
+{% if has_next %}<a class="btn" rel="next" href="{{ base_path }}?page={{ page + 1 }}">Показать ещё</a>{% endif %}
+</nav>
+{% endif %}

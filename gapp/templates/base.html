@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
+<meta name="robots" content="{{ robots | default('index, follow, max-image-preview:large') }}">
+<link rel="canonical" href="{{ site_url }}{{ canonical }}">
+<link rel="alternate" type="application/rss+xml" title="Gapp.az" href="{{ site_url }}/rss.xml">
+<meta property="og:site_name" content="Gapp.az">
+<meta property="og:title" content="{{ title }}">
+<meta property="og:description" content="{{ description }}">
+<meta property="og:url" content="{{ site_url }}{{ canonical }}">
+<meta property="og:locale" content="ru_RU">
+{% block head %}<meta property="og:type" content="website">{% endblock %}
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#e9e9e9;color:#1f1f1f;font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+a{color:inherit;text-decoration:none}a:hover{color:#1a5fd0}
+.wrap{max-width:1280px;margin:0 auto;padding:0 12px 24px}
+.head{display:flex;flex-wrap:wrap;align-items:stretch;background:#fff}
+.logo{display:flex;flex-direction:column;align-items:center;justify-content:center;width:212px;min-height:72px;background:#1a6fe0;color:#fff;font-size:32px;font-weight:600;letter-spacing:-.5px;line-height:1}
+.logo:hover{color:#fff}
+.nav{flex:999 1 480px;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:0 18px;padding:6px 16px;font-size:14px;font-weight:700;text-transform:uppercase}
+.nav a{padding:12px 0}.nav a.on{color:#1a5fd0}
+.search{display:flex;align-items:center;gap:8px;padding:10px 16px}
+.search input{width:170px;height:44px;padding:0 12px;border:1px solid #b8b8b8;border-radius:4px;font:inherit;font-size:14px}
+.search button{height:44px;padding:0 14px;border:0;border-radius:4px;background:#1a6fe0;color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.cols{display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px;margin-top:16px}
+.top{flex:1 1 300px;max-width:420px;min-width:0;background:#fff;padding:16px}
+.feed{flex:999 1 400px;min-width:0;background:#f6f6f6;padding:16px}
+.side{flex:1 1 220px;max-width:300px;min-width:0;background:#fff;padding:16px}
+.tag{display:inline-block;margin:0 0 8px;padding:4px 8px;color:#fff;font-size:15px;font-weight:700;text-transform:uppercase}
+.tag.red{background:#d93025}.tag.gray{background:#6e6e6e}
+.muted{color:#5c5c5c;font-size:13px}
+.more{color:#1a5fd0;font-size:13px;font-weight:600}
+.top a.item{display:block;padding:11px 0;border-top:1px solid #e3e3e3}
+.top .t{display:block;font-weight:600;line-height:1.35}
+.row{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #dcdcdc}
+.row time{flex:0 0 44px;color:#5c5c5c;font-size:14px;font-variant-numeric:tabular-nums}
+.row .t{display:block;font-size:15px;font-weight:500;line-height:1.35}
+.pager{display:flex;gap:12px;margin-top:16px}
+.btn{flex:1;padding:13px;text-align:center;background:#1a6fe0;color:#fff;font-size:15px;font-weight:600;border-radius:4px}
+.btn:hover{color:#fff;background:#1a5fd0}
+.story{flex:999 1 480px;min-width:0;background:#fff;padding:20px}
+.story h1{margin:6px 0 10px;font-size:26px;line-height:1.25}
+.story img{display:block;max-width:100%;height:auto;margin:12px 0 4px;background:#e9e9e9}
+.src{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;padding:12px 0;border-top:1px solid #e3e3e3}
+.src b{flex:0 0 150px}.src a{flex:1 1 260px;color:#1a5fd0}
+.side ul{list-style:none;margin:0;padding:0}.side li{padding:7px 0;border-top:1px solid #e3e3e3;font-size:14px}
+.foot{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px;padding:16px;background:#fff;color:#5c5c5c;font-size:13px}
+.foot span{flex-grow:1}
+@media(max-width:700px){.logo{width:100%;min-height:56px;font-size:26px}.nav{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap}.top,.side{max-width:none}.nav{flex:1 1 100%}.search{flex:1 1 100%;min-width:0}.search label{display:none}.search input{flex:1;width:auto;min-width:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="head">
+<a class="logo" href="/" aria-label="Gapp.az, на главную">gapp.az<svg aria-hidden="true" width="34" height="10" viewBox="0 0 34 10"><path d="M3 2 Q17 12 31 2" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></a>
+<nav class="nav" aria-label="Рубрики">
+{% for slug, name in rubrics %}<a href="/rubrika/{{ slug }}"{% if active_rubric == slug %} class="on" aria-current="page"{% endif %}>{{ name }}</a>
+{% endfor %}</nav>
+<form class="search" role="search" action="/poisk" method="get">
+<label class="muted" for="q">Поиск</label>
+<input id="q" name="q" type="search" maxlength="100" value="{{ query | default('') }}" placeholder="по новостям">
+<button type="submit">Найти</button>
+</form>
+</header>
+{% block content %}{% endblock %}
+<footer class="foot">
+<span>Gapp.az собирает новости азербайджанских изданий и ведёт на сайт источника</span>
+<a href="/o-proekte">О проекте</a>
+<a href="/o-proekte#pravo">Правообладателям</a>
+<a href="/bot">О боте</a>
+<a href="/rss.xml">RSS</a>
+</footer>
+</div>
+</body>
+</html>
