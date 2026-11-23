@@ -1,13 +1,13 @@
 # Русскоязычные ленты азербайджанских СМИ.
-# ВНИМАНИЕ: адреса лент записаны по памяти и НЕ проверены.
-# Перед запуском выполните `python -m gapp.check_feeds` на сервере
-# и исправьте или удалите ленты, которые не отвечают.
-# Сборщик пропускает нерабочие ленты и не падает из-за них.
+# Проверено на сервере 23.11.2026 командой `python -m gapp.check_feeds`.
+# Источники с `enabled: false` не опрашиваются. Чтобы вернуть источник,
+# исправьте адрес ленты и уберите эту строку.
 sources:
   - name: Day.az
     site: https://news.day.az
     feeds: [https://news.day.az/rss/all.rss]
   - name: Trend
+    enabled: false  # лента отдаёт новости на английском, русской ленты пока не нашли, проверено 23.11.2026
     site: https://www.trend.az
     feeds: [https://www.trend.az/feeds/index.rss]
   - name: Report
@@ -17,9 +17,11 @@ sources:
     site: https://ru.apa.az
     feeds: [https://ru.apa.az/rss]
   - name: АЗЕРТАДЖ
+    enabled: false  # сайт отвечает 403 на запрос ленты, проверено 23.11.2026
     site: https://azertag.az/ru
     feeds: [https://azertag.az/ru/rss]
   - name: 1news.az
+    enabled: false  # адрес ленты не существует (404), проверено 23.11.2026
     site: https://1news.az
     feeds: [https://1news.az/rss.xml]
   - name: Haqqin.az
@@ -32,6 +34,7 @@ sources:
     site: https://media.az
     feeds: [https://media.az/rss]
   - name: Oxu.az
+    enabled: false  # сайт отвечает 403 на запрос ленты, проверено 23.11.2026
     site: https://ru.oxu.az
     feeds: [https://ru.oxu.az/rss]
   - name: Vesti.az
@@ -41,8 +44,10 @@ sources:
     site: https://zerkalo.az
     feeds: [https://zerkalo.az/feed/]
   - name: Caliber.az
+    enabled: false  # сайт отвечает 403 на запрос ленты, проверено 23.11.2026
     site: https://caliber.az
     feeds: [https://caliber.az/rss]
   - name: Интерфакс-Азербайджан
+    enabled: false  # сайт не отвечает, проверено 23.11.2026
     site: https://interfax.az
     feeds: [https://interfax.az/rss]
