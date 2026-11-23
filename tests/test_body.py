@@ -219,7 +219,7 @@ def test_body_stats_prints_sizes(conn, capsys):
 
 
 RELATED_PAGE = f"""<html><body><div class="wrap"><div class="content"><h1>Заголовок</h1>
-<img src="/img/photo1.jpg"><p>{PARA}</p><p>{PARA}</p><img src="/img/photo2.jpg"></div>
+<img src="/img/photo1.jpg"><p>{PARA}</p><p>{PARA}</p><p>{PARA}</p><p>{PARA}</p><img src="/img/photo2.jpg"></div>
 <div class="related-news"><div><img src="/img/other1.jpg"></div></div>
 <ul><li><a href="/news/77"><img src="/img/card1.jpg"></a></li></ul>
 <a href="/img/big.jpg"><img src="/img/photo3.jpg"></a></div></body></html>"""
