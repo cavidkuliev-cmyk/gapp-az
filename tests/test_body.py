@@ -240,3 +240,24 @@ def test_share_buttons_and_ads_are_not_media():
     old = [{"type": "image", "url": "https://s.az/media/qaz.png"},
            {"type": "image", "url": "https://s.az/images/share_btn_tg.png"}]
     assert [b["kind"] for b in web.full_blocks("a\nb", old)].count("image") == 1
+
+
+def test_story_shows_article_with_most_photos(conn):
+    import json as _json
+
+    from fastapi.testclient import TestClient
+
+    from gapp.web import app
+
+    page = _story_page(conn)  # статья-источник с двумя фото и видео
+    story = conn.execute("SELECT id, slug FROM stories").fetchone()
+    conn.execute("INSERT INTO sources(id, name, site) VALUES(9, 'Богатый', 'https://r.az')")
+    gallery = [{"type": "image", "url": f"https://r.az/g{n}.jpg"} for n in range(6)]
+    conn.execute(
+        "INSERT INTO articles(source_id, story_id, url, title, summary, published_at, fetched_at, title_hash, body, "
+        "body_status, media, tokens, rubric) VALUES(9, ?, 'https://r.az/1', 'В Баку открыли станцию', '', "
+        "'2026-11-23T10:00:00Z', '2026-11-23T10:00:00Z', 'h9', ?, 'page', ?, '', 'obshestvo')",
+        (story["id"], PARA * 3, _json.dumps(gallery)))
+    conn.commit()
+    html = TestClient(app).get(f"/novost/{story['slug']}-{story['id']}").text
+    assert "https://r.az/g5.jpg" in html and "https://s.az/img/a.jpg" not in html
