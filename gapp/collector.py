@@ -1,6 +1,7 @@
 """Сборщик: опрашивает RSS-ленты, отбрасывает дубликаты, склеивает сюжеты."""
 import calendar
 import logging
+import re
 import sqlite3
 import sys
 import time
@@ -99,9 +100,18 @@ def _entry_time(entry, now: datetime) -> datetime:
     return min(dt, now)  # дата из будущего считается текущим моментом
 
 
+_TURBO_H1 = re.compile(r"<h1[^>]*>(.*?)</h1>", re.S | re.I)
+
+
+def _turbo_title(entry) -> str:
+    """Заголовок из блока Яндекс.Турбо: в таких лентах у записи нет своего <title>."""
+    match = _TURBO_H1.search(entry.get("turbo_content") or "")
+    return clean_text(match.group(1)) if match else ""
+
+
 def entry_to_item(entry, now: datetime) -> dict | None:
     """Превращает запись ленты в словарь статьи или None, если она не подходит."""
-    title = clean_text(entry.get("title"))
+    title = clean_text(entry.get("title")) or _turbo_title(entry)
     url = canonical_url(entry.get("link") or "")
     if not title or not url:
         return None
