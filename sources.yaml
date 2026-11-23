@@ -7,9 +7,11 @@ sources:
     site: https://news.day.az
     feeds: [https://news.day.az/rss/all.rss]
   - name: Trend
-    enabled: false  # ленты и карты на www.trend.az только на английском, адрес русской версии не найден, проверено 23.11.2026
-    site: https://www.trend.az
-    feeds: [https://www.trend.az/feeds/index.rss]
+    site: https://ru.trend.az
+    feeds:
+      - url: https://ru.trend.az/sitemap_news.php  # карта для новостей: заголовки и даты уже в ней
+        type: sitemap
+      - https://ru.trend.az/feeds/index.rss        # 23.11.2026 лента отставала на 10 дней
   - name: Report
     site: https://report.az/ru
     feeds: [https://report.az/ru/rss]
