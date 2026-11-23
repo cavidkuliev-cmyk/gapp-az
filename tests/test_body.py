@@ -206,3 +206,13 @@ def test_full_text_global_switch(conn, monkeypatch):
     monkeypatch.setattr(config, "SHOW_FULL_TEXT", False)
     page = _story_page(conn).text
     assert "Хвост статьи." not in page and "<p>Короткий анонс" in page
+
+
+def test_body_stats_prints_sizes(conn, capsys):
+    from gapp import body_stats
+
+    full = f"<content:encoded><![CDATA[<p>{PARA}</p><p>{PARA}{PARA}</p>]]></content:encoded>"
+    collector.collect_once(conn, client_for({"https://s.az/rss": rss(item(1, "В Баку открыли метро", full))}, []))
+    body_stats.main()
+    out = capsys.readouterr().out
+    assert "Место в базе по дням" in out and "Файл базы:" in out and "Сайт" in out
