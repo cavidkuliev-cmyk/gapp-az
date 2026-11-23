@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Вход | Gapp.az</title>
+<style>
+body{margin:0;background:#e9e9e9;color:#1f1f1f;font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+main{max-width:360px;margin:12vh auto;padding:24px;background:#fff}
+h1{margin:0 0 16px;font-size:22px}
+input{width:100%;height:44px;padding:0 12px;border:1px solid #b8b8b8;border-radius:4px;font:inherit}
+button{margin-top:12px;width:100%;height:44px;border:0;border-radius:4px;background:#1a6fe0;color:#fff;font:inherit;font-weight:600;cursor:pointer}
+.err{color:#d93025;margin:0 0 12px}
+</style>
+</head>
+<body>
+<main>
+<h1>Админка Gapp.az</h1>
+{% if error %}<p class="err">{{ error }}</p>{% endif %}
+<form method="post" action="/admin/login">
+<input type="password" name="password" placeholder="Пароль" autocomplete="current-password" autofocus required>
+<button type="submit">Войти</button>
+</form>
+</main>
+</body>
+</html>

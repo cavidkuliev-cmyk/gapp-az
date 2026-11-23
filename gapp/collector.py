@@ -83,6 +83,10 @@ def sync_sources(conn: sqlite3.Connection, path=None) -> None:
     for (name,) in conn.execute("SELECT name FROM sources WHERE active = 1").fetchall():
         if name not in enabled_names:
             conn.execute("UPDATE sources SET active = 0 WHERE name = ?", (name,))
+    # Ручные настройки из админки сильнее sources.yaml (но не включают убранный из файла источник).
+    for name in enabled_names:
+        conn.execute("UPDATE sources SET active = admin_active WHERE name = ? AND admin_active IS NOT NULL", (name,))
+        conn.execute("UPDATE sources SET show_text = admin_show_text WHERE name = ? AND admin_show_text IS NOT NULL", (name,))
     conn.commit()
 
 

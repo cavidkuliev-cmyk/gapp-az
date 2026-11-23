@@ -90,6 +90,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("articles", "media", "TEXT NOT NULL DEFAULT '[]'"),
         # Показывать ли полный текст статей источника на сайте (sources.yaml: full_text)
         ("sources", "show_text", "INTEGER NOT NULL DEFAULT 1"),
+        # Ручные настройки из админки: NULL значит «как в sources.yaml».
+        ("sources", "admin_active", "INTEGER"),
+        ("sources", "admin_show_text", "INTEGER"),
+        # Сюжет скрыт с сайта вручную (админка).
+        ("stories", "hidden", "INTEGER NOT NULL DEFAULT 0"),
     ):
         have = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if name not in have:
