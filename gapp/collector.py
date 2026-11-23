@@ -10,7 +10,7 @@ import feedparser
 import httpx
 import yaml
 
-from . import config, db
+from . import config, db, summarizer
 from .textutil import (
     canonical_url,
     clean_text,
@@ -268,6 +268,8 @@ def main() -> None:
         try:
             stats = collect_once(conn)
             log.info("обход завершён: %s", stats)
+            if summarizer.enabled():
+                log.info("пересказы: %s", summarizer.summarize_pending(conn))
         except Exception:  # сборщик должен пережить любую ошибку обхода
             log.exception("обход упал")
         time.sleep(config.POLL_INTERVAL)

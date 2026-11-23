@@ -11,7 +11,9 @@
 <p class="muted" style="margin:0"><time datetime="{{ story.first_at | baku_iso }}">{{ story.first_at | full_time }}</time> · {{ story.source_count | sources_label }}</p>
 {% if story.image %}<img src="{{ story.image }}" alt="" width="720" height="405" loading="lazy" referrerpolicy="no-referrer">
 <p class="muted" style="margin:0">Фото: {{ story.main_source }}</p>{% endif %}
-{% if story.summary %}<p>{{ story.summary }}</p>{% endif %}
+{% if story.digest %}<p>{{ story.digest }}</p>
+<p class="muted" style="margin:0">Кратко, составлено автоматически по сообщениям изданий</p>
+{% elif story.summary %}<p>{{ story.summary }}</p>{% endif %}
 <h2 style="font-size:17px;margin:20px 0 8px">Кто об этом пишет</h2>
 {% for a in articles %}
 <div class="src">

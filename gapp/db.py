@@ -66,7 +66,21 @@ def connect(path: Path | str | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Добавляет столбцы, появившиеся после первого запуска."""
+    have = {row[1] for row in conn.execute("PRAGMA table_info(stories)")}
+    for name, ddl in (
+        ("digest", "TEXT NOT NULL DEFAULT ''"),        # пересказ, написанный моделью
+        ("digest_at", "TEXT NOT NULL DEFAULT ''"),     # когда написан или когда была попытка
+        ("digest_sources", "INTEGER NOT NULL DEFAULT 0"),
+    ):
+        if name not in have:
+            conn.execute(f"ALTER TABLE stories ADD COLUMN {name} {ddl}")
+    conn.commit()
 
 
 @contextmanager

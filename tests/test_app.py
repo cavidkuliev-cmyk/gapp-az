@@ -117,3 +117,57 @@ def test_sync_sources_drops_disabled_feeds(tmp_path):
     )
     collector.sync_sources(conn, path)
     assert [r[0] for r in conn.execute("SELECT url FROM feeds")] == ["https://a.az/rss"]
+
+
+class FakeMessages:
+    def __init__(self, text="Центробанк установил курс маната на завтра. Изменений нет.",
+                 stop_reason="end_turn"):
+        self.calls, self.text, self.stop_reason = [], text, stop_reason
+
+    def create(self, **kwargs):
+        from types import SimpleNamespace as NS
+
+        self.calls.append(kwargs)
+        return NS(stop_reason=self.stop_reason, content=[NS(type="text", text=self.text)])
+
+
+class FakeClient:
+    def __init__(self, **kw):
+        self.messages = FakeMessages(**kw)
+
+
+def two_source_story(conn):
+    ingest(conn, 1, item("Центробанк Азербайджана объявил курс маната на завтра", "https://a.az/1"))
+    ingest(conn, 2, item("Центробанк объявил официальный курс маната на завтра", "https://b.az/9"))
+
+
+def test_digest_written_once_for_multi_source_story(conn):
+    from gapp import summarizer
+
+    two_source_story(conn)
+    ingest(conn, 1, item("В Гяндже отремонтируют центральный парк", "https://a.az/2"))
+    client = FakeClient()
+    assert summarizer.summarize_pending(conn, client)["written"] == 1
+    assert len(client.messages.calls) == 1  # сюжет с одним источником не трогаем
+    call = client.messages.calls[0]
+    assert call["model"] == config.SUMMARY_MODEL and "Материал 2" in call["messages"][0]["content"]
+    assert summarizer.summarize_pending(conn, client)["written"] == 0  # повторно не платим
+    assert len(client.messages.calls) == 1
+    row = conn.execute("SELECT * FROM stories WHERE digest != ''").fetchone()
+    page = TestClient(__import__("gapp.web", fromlist=["app"]).app).get(
+        f"/novost/{row['slug']}-{row['id']}")
+    assert "Изменений нет." in page.text and "составлено автоматически" in page.text
+
+
+def test_digest_respects_daily_limit_and_refusal(conn, monkeypatch):
+    from gapp import summarizer
+
+    two_source_story(conn)
+    monkeypatch.setattr(config, "SUMMARY_DAILY_LIMIT", 0)
+    client = FakeClient()
+    assert summarizer.summarize_pending(conn, client) == {"written": 0, "failed": 0, "skipped_limit": 1}
+    assert client.messages.calls == []
+    monkeypatch.setattr(config, "SUMMARY_DAILY_LIMIT", 10)
+    refused = FakeClient(stop_reason="refusal")
+    assert summarizer.summarize_pending(conn, refused)["failed"] == 1
+    assert summarizer.summarize_pending(conn, refused)["failed"] == 0  # одна попытка на сюжет

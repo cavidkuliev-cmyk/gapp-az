@@ -36,6 +36,20 @@ docker compose exec collector python -m gapp.check_feeds
 
 Caddy сам получит сертификат HTTPS. Для другого домена задайте `GAPP_DOMAIN=example.com` в файле `.env`. База лежит в томе `data`.
 
+## Пересказы сюжетов
+
+Если задан ключ `ANTHROPIC_API_KEY`, сборщик после каждого обхода пишет короткий пересказ для сюжетов, о которых сообщили минимум два издания. Модель видит только заголовки и анонсы из лент. Пересказ пишется один раз на сюжет и показывается с пометкой «составлено автоматически».
+
+На сервере создайте рядом с `docker-compose.yml` файл `.env`:
+
+```
+ANTHROPIC_API_KEY=ваш_ключ
+GAPP_SUMMARY_MODEL=claude-haiku-5-5
+GAPP_SUMMARY_DAILY_LIMIT=400
+```
+
+и перезапустите: `docker compose up -d`. Без ключа пересказы выключены, остальное работает как раньше. Файл `.env` в репозиторий не попадает.
+
 ## Настройки
 
-Переменные окружения: `GAPP_DB`, `GAPP_SOURCES`, `GAPP_SITE_URL`, `GAPP_USER_AGENT`, `GAPP_POLL_INTERVAL`, `GAPP_STORY_WINDOW_HOURS`, `GAPP_STORY_SIMILARITY`, `GAPP_INDEX_MIN_SOURCES`. Значения по умолчанию смотрите в `gapp/config.py`.
+Переменные окружения: `GAPP_DB`, `GAPP_SOURCES`, `GAPP_SITE_URL`, `GAPP_USER_AGENT`, `GAPP_POLL_INTERVAL`, `GAPP_STORY_WINDOW_HOURS`, `GAPP_STORY_SIMILARITY`, `GAPP_INDEX_MIN_SOURCES`, `GAPP_SUMMARY_MODEL`, `GAPP_SUMMARY_MIN_SOURCES`, `GAPP_SUMMARY_DAILY_LIMIT`, `GAPP_SUMMARY_PER_PASS`. Значения по умолчанию смотрите в `gapp/config.py`.
