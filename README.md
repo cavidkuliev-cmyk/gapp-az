@@ -24,6 +24,29 @@ pytest -q
 
 Список лежит в `sources.yaml`. Адреса лент нужно проверить командой `python -m gapp.check_feeds`: она покажет по каждой ленте статус и число записей. Неработающие адреса исправьте или поставьте источнику `enabled: false`.
 
+### Сайты без RSS
+
+Сборщик умеет брать новости тремя способами: лента RSS, карта сайта и страница раздела. Подобрать способ для нового сайта помогает команда:
+
+```bash
+docker compose exec collector python -m gapp.discover https://site.az/ru/
+```
+
+Она проверяет ленты, карты сайта и ссылки на главной, а в конце печатает готовый фрагмент для `sources.yaml`:
+
+```yaml
+  - name: Сайт
+    site: https://site.az/ru
+    feeds:
+      - url: https://site.az/news-sitemap.xml
+        type: sitemap            # карта сайта
+      - url: https://site.az/ru/
+        type: html               # страница раздела
+        pattern: '^/ru/[^/]+/\d+'  # как выглядит адрес статьи
+```
+
+Для карты сайта и страницы раздела заголовок, анонс, картинка и дата берутся из разметки статьи (Open Graph, JSON-LD). За один обход с сайта скачивается не больше `GAPP_PAGE_FETCH_LIMIT` страниц (по умолчанию 10), каждая статья один раз. Сборщик соблюдает `robots.txt` и не маскируется под браузер: если сайт отвечает 403, нужна договорённость с изданием.
+
 ## Запуск на сервере
 
 Нужен сервер с Docker и домен, записи A для `gapp.az` и `www.gapp.az` указывают на сервер.
@@ -38,4 +61,4 @@ Caddy сам получит сертификат HTTPS. Для другого д
 
 ## Настройки
 
-Переменные окружения: `GAPP_DB`, `GAPP_SOURCES`, `GAPP_SITE_URL`, `GAPP_USER_AGENT`, `GAPP_POLL_INTERVAL`, `GAPP_STORY_WINDOW_HOURS`, `GAPP_STORY_SIMILARITY`, `GAPP_INDEX_MIN_SOURCES`. Значения по умолчанию смотрите в `gapp/config.py`.
+Переменные окружения: `GAPP_DB`, `GAPP_SOURCES`, `GAPP_SITE_URL`, `GAPP_USER_AGENT`, `GAPP_POLL_INTERVAL`, `GAPP_STORY_WINDOW_HOURS`, `GAPP_STORY_SIMILARITY`, `GAPP_INDEX_MIN_SOURCES`, `GAPP_PAGE_FETCH_LIMIT`. Значения по умолчанию смотрите в `gapp/config.py`.

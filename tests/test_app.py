@@ -102,6 +102,7 @@ def test_sync_sources_drops_disabled_feeds(tmp_path):
 
     conn = sqlite3.connect(":memory:")
     conn.executescript(db.SCHEMA)
+    db._migrate(conn)
     path = tmp_path / "s.yaml"
     path.write_text(
         "sources:\n  - {name: A, site: 'https://a.az', feeds: ['https://a.az/rss']}\n"

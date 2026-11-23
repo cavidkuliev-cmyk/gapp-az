@@ -28,3 +28,6 @@ RUBRICS = [
     ("raznoe", "Разное"),
 ]
 RUBRIC_NAMES = dict(RUBRICS)
+
+# Сколько страниц статей можно скачать с одного сайта за обход (для сайтов без RSS).
+PAGE_FETCH_LIMIT = int(os.environ.get("GAPP_PAGE_FETCH_LIMIT", "10"))
