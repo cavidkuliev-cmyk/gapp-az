@@ -102,6 +102,7 @@ def test_sync_sources_drops_disabled_feeds(tmp_path):
 
     conn = sqlite3.connect(":memory:")
     conn.executescript(db.SCHEMA)
+    db._migrate(conn)
     path = tmp_path / "s.yaml"
     path.write_text(
         "sources:\n  - {name: A, site: 'https://a.az', feeds: ['https://a.az/rss']}\n"
@@ -117,6 +118,7 @@ def test_sync_sources_drops_disabled_feeds(tmp_path):
     )
     collector.sync_sources(conn, path)
     assert [r[0] for r in conn.execute("SELECT url FROM feeds")] == ["https://a.az/rss"]
+    assert [r[0] for r in conn.execute("SELECT name FROM sources WHERE active = 1")] == ["A"]
 
 
 class FakeMessages:

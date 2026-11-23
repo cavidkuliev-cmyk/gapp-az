@@ -10,7 +10,7 @@ import feedparser
 import httpx
 import yaml
 
-from . import config, db, summarizer
+from . import config, db, scrape, summarizer
 from .textutil import (
     canonical_url,
     clean_text,
@@ -43,24 +43,37 @@ def sync_sources(conn: sqlite3.Connection, path=None) -> None:
     with open(path or config.SOURCES_PATH, encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
     wanted: set[str] = set()
+    enabled_names: set[str] = set()
     for src in data.get("sources", []):
         if src.get("enabled", True) is False:
             continue
+        enabled_names.add(src["name"])
         conn.execute(
             "INSERT INTO sources(name, site) VALUES(?, ?) "
-            "ON CONFLICT(name) DO UPDATE SET site=excluded.site",
+            "ON CONFLICT(name) DO UPDATE SET site=excluded.site, active=1",
             (src["name"], src["site"]),
         )
         source_id = conn.execute("SELECT id FROM sources WHERE name=?", (src["name"],)).fetchone()[0]
-        for url in src.get("feeds", []):
+        for feed in src.get("feeds", []):
+            if isinstance(feed, str):
+                feed = {"url": feed}
+            url, kind = feed["url"], feed.get("type", "rss")
+            if kind not in ("rss", "sitemap", "html"):
+                raise ValueError(f"{src['name']}: неизвестный тип ленты {kind!r}")
             wanted.add(url)
             conn.execute(
-                "INSERT OR IGNORE INTO feeds(source_id, url) VALUES(?, ?)", (source_id, url)
+                "INSERT INTO feeds(source_id, url, kind, pattern) VALUES(?, ?, ?, ?) "
+                "ON CONFLICT(url) DO UPDATE SET kind=excluded.kind, pattern=excluded.pattern",
+                (source_id, url, kind, feed.get("pattern", "")),
             )
     # Ленты, убранные из файла или выключенные, больше не опрашиваем.
     for (url,) in conn.execute("SELECT url FROM feeds").fetchall():
         if url not in wanted:
             conn.execute("DELETE FROM feeds WHERE url=?", (url,))
+    # Выключенные и убранные из файла источники скрываем со списка на сайте.
+    for (name,) in conn.execute("SELECT name FROM sources WHERE active = 1").fetchall():
+        if name not in enabled_names:
+            conn.execute("UPDATE sources SET active = 0 WHERE name = ?", (name,))
     conn.commit()
 
 
@@ -193,6 +206,94 @@ def ingest(conn: sqlite3.Connection, source_id: int, item: dict, now: datetime |
     return result
 
 
+def _known(conn, url: str) -> bool:
+    return bool(
+        conn.execute("SELECT 1 FROM articles WHERE url = ?", (url,)).fetchone()
+        or conn.execute("SELECT 1 FROM seen_urls WHERE url = ?", (url,)).fetchone()
+    )
+
+
+def _candidates(client, robots, feed, body: bytes) -> list[dict]:
+    if feed["kind"] == "html":
+        html = body.decode("utf-8", "replace")
+        return scrape.links_matching(html, feed["url"], feed["pattern"] or r"\d{3,}")
+    kind, items = scrape.parse_sitemap(body)
+    if kind != "index":
+        return items
+    # Индекс карт: берём две самые свежие вложенные карты.
+    floor = datetime.min.replace(tzinfo=timezone.utc)
+    nested = sorted(items, key=lambda i: i["date"] or floor, reverse=True)[:2]
+    result = []
+    for child in nested:
+        if not robots.allowed(child["url"]):
+            continue
+        try:
+            resp = client.get(child["url"])
+        except httpx.HTTPError:
+            continue
+        if resp.status_code == 200 and len(resp.content) <= MAX_FEED_BYTES:
+            result.extend(scrape.parse_sitemap(resp.content)[1])
+        time.sleep(1)
+    return result
+
+
+def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
+    """Статьи с сайта без RSS. Отдаёт словарь статьи или None для неподходящей."""
+    candidates = _candidates(client, robots, feed, body)
+    floor = datetime.min.replace(tzinfo=timezone.utc)
+    candidates.sort(key=lambda c: c["date"] or floor, reverse=True)
+    fetched = 0
+    for cand in candidates:
+        url = canonical_url(cand["url"])
+        if not url or _known(conn, url):
+            continue
+        if cand["date"] and now - cand["date"] > timedelta(days=MAX_AGE_DAYS):
+            continue
+        if cand["lang"] and not cand["lang"].startswith("ru"):
+            continue
+        meta = {"title": cand["title"], "summary": "", "image": cand["image"], "date": cand["date"]}
+        if not (cand["title"] and cand["date"]):
+            # В карте нет заголовка: читаем страницу статьи, но не больше лимита за обход.
+            if fetched >= config.PAGE_FETCH_LIMIT:
+                break
+            if not robots.allowed(url):
+                continue
+            fetched += 1
+            conn.execute("INSERT OR REPLACE INTO seen_urls(url, seen_at) VALUES(?, ?)", (url, iso(now)))
+            try:
+                resp = client.get(url)
+            except httpx.HTTPError:
+                continue
+            finally:
+                time.sleep(1)
+            if resp.status_code != 200 or len(resp.content) > MAX_FEED_BYTES:
+                yield None
+                continue
+            page = scrape.article_meta(resp.text)
+            if feed["kind"] == "html" and not (page["date"] or page["type"] == "article"):
+                yield None  # это не статья, а раздел или служебная страница
+                continue
+            meta = {
+                "title": cand["title"] or page["title"],
+                "summary": page["summary"],
+                "image": cand["image"] or page["image"],
+                "date": cand["date"] or page["date"],
+            }
+        published = min(meta["date"] or now, now)
+        if (
+            not meta["title"]
+            or not is_russian(meta["title"] + " " + meta["summary"])
+            or now - published > timedelta(days=MAX_AGE_DAYS)
+        ):
+            yield None
+            continue
+        yield {
+            "title": meta["title"], "url": url, "summary": meta["summary"],
+            "image": meta["image"] if meta["image"].startswith(("http://", "https://")) else "",
+            "rubric": detect_rubric([], url), "published_at": published,
+        }
+
+
 def fetch_feed(client: httpx.Client, feed) -> tuple[str, bytes | None, dict]:
     """Скачивает ленту с условным запросом. Возвращает (статус, тело, заголовки кеша)."""
     headers = {}
@@ -220,6 +321,8 @@ def collect_once(conn: sqlite3.Connection, client: httpx.Client | None = None) -
         follow_redirects=True,
     )
     stats = {"new": 0, "joined": 0, "duplicate": 0, "skipped": 0, "failed_feeds": 0}
+    robots = scrape.Robots(client, config.USER_AGENT)
+    conn.execute("DELETE FROM seen_urls WHERE seen_at < ?", (iso(now_utc() - timedelta(days=30)),))
     try:
         feeds = conn.execute(
             "SELECT f.*, s.name AS source_name FROM feeds f JOIN sources s ON s.id = f.source_id "
@@ -228,7 +331,10 @@ def collect_once(conn: sqlite3.Connection, client: httpx.Client | None = None) -
         for feed in feeds:
             now = now_utc()
             try:
-                status, body, cache = fetch_feed(client, feed)
+                if feed["kind"] != "rss" and not robots.allowed(feed["url"]):
+                    status, body, cache = "robots", None, {}
+                else:
+                    status, body, cache = fetch_feed(client, feed)
             except httpx.HTTPError as exc:
                 status, body, cache = f"error: {type(exc).__name__}", None, {}
             ok = status in ("200", "304")
@@ -241,10 +347,16 @@ def collect_once(conn: sqlite3.Connection, client: httpx.Client | None = None) -
             if not ok:
                 stats["failed_feeds"] += 1
                 log.warning("лента %s: %s", feed["url"], status)
-            if body:
+            if body and feed["kind"] == "rss":
                 parsed = feedparser.parse(body)
                 for entry in parsed.entries:
                     item = entry_to_item(entry, now)
+                    if item is None:
+                        stats["skipped"] += 1
+                        continue
+                    stats[ingest(conn, feed["source_id"], item, now)] += 1
+            elif body:
+                for item in scrape_items(conn, client, robots, feed, body, now):
                     if item is None:
                         stats["skipped"] += 1
                         continue
