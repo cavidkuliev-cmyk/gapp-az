@@ -143,7 +143,7 @@ def story(request: Request, slug_id: str):
         request, "story.html", story=item, articles=articles, related=related,
         indexable=indexable, active_rubric=item["rubric"],
         title=f"{item['title']} | Gapp.az",
-        description=item["summary"] or item["title"],
+        description=item["digest"] or item["summary"] or item["title"],
         canonical=story_path(item),
         robots="index, follow, max-image-preview:large" if indexable else "noindex, follow",
     )

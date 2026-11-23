@@ -29,5 +29,11 @@ RUBRICS = [
 ]
 RUBRIC_NAMES = dict(RUBRICS)
 
+# Пересказы сюжетов через Claude API. Работают, только если задан ANTHROPIC_API_KEY.
+SUMMARY_MODEL = os.environ.get("GAPP_SUMMARY_MODEL", "claude-haiku-5-5")
+SUMMARY_MIN_SOURCES = int(os.environ.get("GAPP_SUMMARY_MIN_SOURCES", "2"))
+# Потолок числа пересказов в сутки, чтобы всплеск новостей не раздул счёт.
+SUMMARY_DAILY_LIMIT = int(os.environ.get("GAPP_SUMMARY_DAILY_LIMIT", "400"))
+SUMMARY_PER_PASS = int(os.environ.get("GAPP_SUMMARY_PER_PASS", "20"))
 # Сколько страниц статей можно скачать с одного сайта за обход (для сайтов без RSS).
 PAGE_FETCH_LIMIT = int(os.environ.get("GAPP_PAGE_FETCH_LIMIT", "10"))
