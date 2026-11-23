@@ -117,3 +117,4 @@ def test_sync_sources_drops_disabled_feeds(tmp_path):
     )
     collector.sync_sources(conn, path)
     assert [r[0] for r in conn.execute("SELECT url FROM feeds")] == ["https://a.az/rss"]
+    assert [r[0] for r in conn.execute("SELECT name FROM sources WHERE active = 1")] == ["A"]

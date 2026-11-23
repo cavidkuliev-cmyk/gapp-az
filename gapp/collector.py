@@ -43,12 +43,14 @@ def sync_sources(conn: sqlite3.Connection, path=None) -> None:
     with open(path or config.SOURCES_PATH, encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
     wanted: set[str] = set()
+    enabled_names: set[str] = set()
     for src in data.get("sources", []):
         if src.get("enabled", True) is False:
             continue
+        enabled_names.add(src["name"])
         conn.execute(
             "INSERT INTO sources(name, site) VALUES(?, ?) "
-            "ON CONFLICT(name) DO UPDATE SET site=excluded.site",
+            "ON CONFLICT(name) DO UPDATE SET site=excluded.site, active=1",
             (src["name"], src["site"]),
         )
         source_id = conn.execute("SELECT id FROM sources WHERE name=?", (src["name"],)).fetchone()[0]
@@ -61,6 +63,10 @@ def sync_sources(conn: sqlite3.Connection, path=None) -> None:
     for (url,) in conn.execute("SELECT url FROM feeds").fetchall():
         if url not in wanted:
             conn.execute("DELETE FROM feeds WHERE url=?", (url,))
+    # Выключенные и убранные из файла источники скрываем со списка на сайте.
+    for (name,) in conn.execute("SELECT name FROM sources WHERE active = 1").fetchall():
+        if name not in enabled_names:
+            conn.execute("UPDATE sources SET active = 0 WHERE name = ?", (name,))
     conn.commit()
 
 
