@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from . import config, db
+from . import config, db, scrape
 from .textutil import slugify
 
 BAKU = timezone(timedelta(hours=4))
@@ -90,7 +90,10 @@ def media_item(item: dict) -> dict:
 def full_blocks(body: str, media: list[dict]) -> list[dict]:
     """Абзацы статьи, между которыми расставлены её фото и видео."""
     paragraphs = [p for p in body.split("\n") if p.strip()]
-    items = [media_item(m) for m in media]
+    # Уже сохранённые вложения тоже чистим: значки, кнопки и реклама не показываются.
+    items = [media_item(m) for m in media
+             if m.get("type") == "video" or not scrape.is_junk_media(m.get("url", ""))]
+    items = items[:scrape.MEDIA_LIMIT]
     images = [m for m in items if m["kind"] == "image"]
     others = [m for m in items if m["kind"] != "image"]
     blocks = [images.pop(0)] if images else []

@@ -247,6 +247,11 @@ _SKIP_TAGS = {"script", "style", "noscript", "nav", "footer", "header", "aside",
               "figure", "figcaption", "button", "select", "iframe", "svg", "template"}
 _CHROME_TAGS = {"nav", "footer", "header", "aside", "form", "noscript", "template"}
 _BLOCK_TAGS = {"div", "article", "section", "main", "td", "body"}
+# Блоки «читайте также», ленты, виджеты: по классу или id. Их картинки не относятся к статье.
+_CHROME_CLASS = re.compile(
+    r"related|similar|recommend|read-?more|also|more-news|latest|popular|trending|most-?read|"
+    r"sidebar|widget|other-news|news-list|lenta|feed|slider|carousel|banner|advert|comment|"
+    r"share|social|breadcrumb|tags?\b|newsletter|subscribe", re.I)
 _VOID_TAGS = {"br", "img", "hr", "input", "meta", "link", "source", "wbr", "area", "base", "col",
               "embed", "param", "track"}
 
@@ -262,6 +267,8 @@ class _BodyParser(HTMLParser):
         self.roots: set[int] = set()             # блоки <article> и <main>
         self.media: list[tuple[int, str, str]] = []  # (блок, image|video, адрес)
         self._chrome = 0                         # глубина внутри меню, подвала, боковой колонки
+        self._chrome_at: list[int] = []          # глубины стека, где блок помечен по классу
+        self._links: list[str] = []              # адреса открытых ссылок <a>
         self._next = 0
         self._skip = 0
         self._para: list[str] | None = None
@@ -273,6 +280,9 @@ class _BodyParser(HTMLParser):
         return 0
 
     def _add_media(self, kind: str, url: str | None):
+        if kind == "image" and self._links and not self._links[-1].lower().split("?")[0].endswith(
+                (".jpg", ".jpeg", ".png", ".webp", ".avif")):
+            return  # картинка-ссылка на другую страницу: карточка соседней новости
         if url and not self._chrome:
             self.media.append((self._block(), kind, url.strip()))
 
@@ -300,8 +310,14 @@ class _BodyParser(HTMLParser):
             if tag in ("article", "main"):
                 self.roots.add(block)
         self.stack.append((tag, block))
+        if tag == "a":
+            self._links.append(a.get("href") or "#")
         if tag in _CHROME_TAGS:
             self._chrome += 1
+        elif tag in ("div", "section", "ul", "ol", "aside") and _CHROME_CLASS.search(
+                (a.get("class") or "") + " " + (a.get("id") or "")):
+            self._chrome += 1
+            self._chrome_at.append(len(self.stack) - 1)
         if tag in _SKIP_TAGS:
             self._skip += 1
         elif tag == "p" and not self._skip:
@@ -327,8 +343,13 @@ class _BodyParser(HTMLParser):
                         self._skip -= 1
                     if closed in _CHROME_TAGS:
                         self._chrome -= 1
+                    if closed == "a" and self._links:
+                        self._links.pop()
                     if closed == "p":
                         self._flush()
+                while self._chrome_at and self._chrome_at[-1] >= pos:
+                    self._chrome_at.pop()
+                    self._chrome -= 1
                 del self.stack[pos:]
                 break
 
@@ -341,8 +362,16 @@ _VIDEO_HOSTS = ("youtube.com", "youtube-nocookie.com", "youtu.be", "vimeo.com", 
                 "ok.ru", "vk.com", "vkvideo.ru", "dailymotion.com", "facebook.com/plugins/video",
                 "t.me", "tiktok.com", "instagram.com")
 _VIDEO_EXT = (".mp4", ".webm", ".m3u8", ".mov")
-_JUNK_MEDIA = re.compile(r"logo|icon|avatar|sprite|banner|pixel|spacer|blank|emoji|/ads?/|counter", re.I)
-MEDIA_LIMIT = 40
+_JUNK_MEDIA = re.compile(
+    r"logo|icon|avatar|sprite|banner|pixel|spacer|blank|emoji|counter|/ads?/|/adv/|advert|reklam|"
+    r"share|_btn|btn_|button|print|whatsapp|telegram|facebook|twitter|social|rss|arrow|bullet|"
+    r"placeholder|loading|loader|noimage|no-image|default[-_.]", re.I)
+
+
+def is_junk_media(url: str) -> bool:
+    """Значки, кнопки «поделиться», реклама: не фото статьи."""
+    return bool(_JUNK_MEDIA.search(url))
+MEDIA_LIMIT = 15
 
 
 def _clean_media(found, base_url: str) -> list[dict]:
@@ -358,7 +387,7 @@ def _clean_media(found, base_url: str) -> list[dict]:
         if kind == "video":
             if not (any(host in url for host in _VIDEO_HOSTS) or path.endswith(_VIDEO_EXT)):
                 continue  # посторонние iframe: реклама, виджеты, счётчики
-        elif path.endswith((".svg", ".gif", ".ico")) or _JUNK_MEDIA.search(url):
+        elif path.endswith((".svg", ".gif", ".ico")) or is_junk_media(url):
             continue
         seen.add(url)
         result.append({"type": kind, "url": url})
