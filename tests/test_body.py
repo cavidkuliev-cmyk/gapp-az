@@ -120,20 +120,6 @@ def test_robots_disallow_stops_body_fetch(conn):
     assert conn.execute("SELECT body_status FROM articles").fetchone()[0] == "blocked"
 
 
-def test_full_text_is_not_shown_on_the_site(conn):
-    from fastapi.testclient import TestClient
-
-    from gapp.web import app
-
-    full = f"<content:encoded><![CDATA[<p>{PARA}</p><p>Секретный хвост статьи. {PARA}</p>]]></content:encoded>"
-    collector.collect_once(conn, client_for(
-        {"https://s.az/rss": rss(item(1, "В Баку открыли новую станцию метро", full))}, []))
-    story = conn.execute("SELECT id, slug FROM stories").fetchone()
-    site = TestClient(app)
-    html = site.get(f"/novost/{story['slug']}-{story['id']}").text + site.get("/").text + site.get("/rss.xml").text
-    assert "Короткий анонс" in html and "Секретный хвост" not in html
-
-
 MEDIA_PAGE = f"""<html><head><meta property="og:image" content="https://s.az/img/main.jpg">
 <script type="application/ld+json">{{"@type": "NewsArticle", "headline": "h",
 "video": {{"@type": "VideoObject", "embedUrl": "https://www.youtube.com/embed/abc123"}}}}</script></head><body>
@@ -182,3 +168,41 @@ def test_media_saved_from_page_and_feed(conn):
     page_media = json.loads(rows["https://s.az/news/2"]["media"])
     assert rows["https://s.az/news/2"]["body_status"] == "page" and len(page_media) == 5
     assert not any(h.endswith((".jpg", ".mp4")) for h in hits)  # сами файлы не скачиваются
+
+
+def _story_page(conn, source_extra=""):
+    from fastapi.testclient import TestClient
+
+    from gapp.web import app
+
+    full = (f"<content:encoded><![CDATA[<p>{PARA}</p><img src='https://s.az/img/a.jpg'>"
+            f"<p>Хвост <b>статьи</b>. {PARA}</p><p>{PARA}</p><img src='https://s.az/img/b.jpg'>"
+            "<iframe src='https://www.youtube.com/embed/zzz'></iframe>"
+            "<iframe src='https://evil.example/x'></iframe>]]></content:encoded>")
+    collector.collect_once(conn, client_for(
+        {"https://s.az/rss": rss(item(1, "В Баку открыли <станцию> метро", full))}, []))
+    story = conn.execute("SELECT id, slug FROM stories").fetchone()
+    return TestClient(app).get(f"/novost/{story['slug']}-{story['id']}")
+
+
+def test_story_page_shows_full_text_photo_and_video(conn):
+    page = _story_page(conn).text
+    assert "Хвост статьи." in page and "<p>Короткий анонс" not in page
+    assert 'src="https://s.az/img/a.jpg"' in page and 'src="https://s.az/img/b.jpg"' in page
+    assert 'src="https://www.youtube.com/embed/zzz"' in page
+    assert "evil.example" not in page                       # посторонние вставки не показываются
+    assert "Источник: <b>Сайт</b>" in page and 'href="https://s.az/news/1"' in page
+    assert "<станцию>" not in page                         # разметка из заголовков не попадает на страницу
+
+
+def test_full_text_can_be_switched_off(conn, monkeypatch):
+    conn.execute("UPDATE sources SET show_text = 0")
+    conn.commit()
+    page = _story_page(conn).text                           # выключено для источника
+    assert "Хвост статьи." not in page and "<p>Короткий анонс" in page
+
+
+def test_full_text_global_switch(conn, monkeypatch):
+    monkeypatch.setattr(config, "SHOW_FULL_TEXT", False)
+    page = _story_page(conn).text
+    assert "Хвост статьи." not in page and "<p>Короткий анонс" in page

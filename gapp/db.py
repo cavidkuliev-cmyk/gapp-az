@@ -88,6 +88,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("articles", "body_status", "TEXT NOT NULL DEFAULT ''"),
         # Фото и видео статьи: JSON-список {"type": "image"|"video", "url": ...}. Только адреса.
         ("articles", "media", "TEXT NOT NULL DEFAULT '[]'"),
+        # Показывать ли полный текст статей источника на сайте (sources.yaml: full_text)
+        ("sources", "show_text", "INTEGER NOT NULL DEFAULT 1"),
     ):
         have = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if name not in have:

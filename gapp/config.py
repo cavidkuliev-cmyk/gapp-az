@@ -29,6 +29,10 @@ RUBRICS = [
 ]
 RUBRIC_NAMES = dict(RUBRICS)
 
+# Показывать ли на страницах новостей полный текст, фото и видео. Общий выключатель;
+# отдельному источнику показ отключается в sources.yaml строкой `full_text: false`.
+SHOW_FULL_TEXT = os.environ.get("GAPP_SHOW_FULL_TEXT", "1") not in ("0", "false", "no", "")
+
 # Сколько страниц статей можно скачать с одного сайта за обход (для сайтов без RSS).
 PAGE_FETCH_LIMIT = int(os.environ.get("GAPP_PAGE_FETCH_LIMIT", "10"))
 
@@ -80,6 +84,7 @@ I18N = {
         "min_query": "Введите не меньше трёх букв.", "main": "Главная", "crumbs": "Навигация",
         "who": "Кто об этом пишет", "read_at": "Читать на сайте {name}", "photo": "Фото",
         "related_label": "Ещё по теме", "related": "{name}: ещё новости",
+        "source_word": "Источник", "original": "оригинал статьи",
         "foot": "Gapp.az собирает новости азербайджанских изданий и ведёт на сайт источника",
         "about_link": "О проекте", "rights": "Правообладателям", "bot": "О боте",
     },
@@ -104,6 +109,7 @@ I18N = {
         "min_query": "Ən azı üç hərf daxil edin.", "main": "Ana səhifə", "crumbs": "Naviqasiya",
         "who": "Bu barədə kim yazır", "read_at": "{name} saytında oxu", "photo": "Foto",
         "related_label": "Mövzu üzrə", "related": "{name}: digər xəbərlər",
+        "source_word": "Mənbə", "original": "orijinal məqalə",
         "foot": "Gapp.az Azərbaycan nəşrlərinin xəbərlərini toplayır və mənbənin saytına yönləndirir",
         "about_link": "Layihə haqqında", "rights": "Müəllif hüququ sahiblərinə", "bot": "Bot haqqında",
     },

@@ -56,10 +56,11 @@ def sync_sources(conn: sqlite3.Connection, path=None) -> None:
         if lang not in LANGS:
             raise ValueError(f"{src['name']}: неизвестный язык {lang!r}")
         conn.execute(
-            "INSERT INTO sources(name, site, lang, title) VALUES(?, ?, ?, ?) "
+            "INSERT INTO sources(name, site, lang, title, show_text) VALUES(?, ?, ?, ?, ?) "
             "ON CONFLICT(name) DO UPDATE SET site=excluded.site, lang=excluded.lang, "
-            "title=excluded.title, active=1",
-            (src["name"], src["site"], lang, src.get("title", "")),
+            "title=excluded.title, show_text=excluded.show_text, active=1",
+            (src["name"], src["site"], lang, src.get("title", ""),
+             0 if src.get("full_text", True) is False else 1),
         )
         source_id = conn.execute("SELECT id FROM sources WHERE name=?", (src["name"],)).fetchone()[0]
         for feed in src.get("feeds", []):

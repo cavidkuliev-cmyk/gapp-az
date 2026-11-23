@@ -49,3 +49,9 @@ def test_clean_text_drops_script_and_style_content():
     from gapp.textutil import clean_text
 
     assert clean_text("До <script>alert(1)</script><style>p{color:red}</style> <b>после</b>") == "До после"
+
+
+def test_clean_text_keeps_punctuation_next_to_inline_tags():
+    from gapp.textutil import clean_text
+
+    assert clean_text("Хвост <b>статьи</b>. А <a href='x'>ссылка</a>, да.<p>Новый</p>абзац") == "Хвост статьи. А ссылка, да. Новый абзац"
