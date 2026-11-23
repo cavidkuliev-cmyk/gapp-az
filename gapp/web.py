@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.templating import Jinja2Templates
 
 from . import config, db
+from .textutil import slugify
 
 BAKU = timezone(timedelta(hours=4))
 PAGE_SIZE = 60
@@ -128,6 +129,47 @@ def paged(path: str, page: int) -> str:
     return path if page == 1 else f"{path}?page={page}"
 
 
+def source_slug(row) -> str:
+    return slugify(row["title"] or row["name"])
+
+
+def active_sources(conn, lang: str) -> list[dict]:
+    """Источники языковой версии для списка на сайте: имя, адрес издания и адрес страницы на gapp.az."""
+    rows = conn.execute(
+        "SELECT id, name, title, site FROM sources WHERE active = 1 AND lang = ?", (lang,)
+    ).fetchall()
+    path = config.I18N[lang]["source"]
+    items = [
+        {"id": r["id"], "name": r["title"] or r["name"], "site": r["site"],
+         "slug": source_slug(r), "path": path + source_slug(r)}
+        for r in rows
+    ]
+    return sorted(items, key=lambda item: item["name"].lower())
+
+
+def source_page(request: Request, lang: str, slug: str, page: int):
+    L = config.I18N[lang]
+    with db.session() as conn:
+        source = next((s for s in active_sources(conn, lang) if s["slug"] == slug), None)
+        if source is None:
+            raise HTTPException(404)
+        rows = conn.execute(
+            "SELECT a.title AS title, a.published_at AS last_at, st.id AS id, st.slug AS slug, "
+            "st.lang AS lang, st.source_count AS source_count, ? AS main_source "
+            "FROM articles a JOIN stories st ON st.id = a.story_id "
+            "WHERE a.source_id = ? ORDER BY a.published_at DESC LIMIT ? OFFSET ?",
+            (source["name"], source["id"], PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
+        ).fetchall()
+    return render(
+        request, "list.html", lang, feed=rows[:PAGE_SIZE], page=page, has_next=len(rows) > PAGE_SIZE,
+        heading=source["name"], base_path=source["path"], site_link=source["site"],
+        title=L["source_title"].format(name=source["name"]),
+        description=L["source_desc"].format(name=source["name"]),
+        canonical=paged(source["path"], page),
+        robots="index, follow, max-image-preview:large" if page == 1 else "noindex, follow",
+    )
+
+
 def home_page(request: Request, lang: str, page: int):
     L = config.I18N[lang]
     with db.session() as conn:
@@ -137,11 +179,7 @@ def home_page(request: Request, lang: str, page: int):
             (lang, iso_ago(hours=24)),
         ).fetchall()
         feed, has_next = story_list(conn, lang, None, page)
-        sources = conn.execute(
-            "SELECT COALESCE(NULLIF(title, ''), name) AS name, site FROM sources "
-            "WHERE active = 1 AND lang = ? ORDER BY name",
-            (lang,),
-        ).fetchall()
+        sources = active_sources(conn, lang)
     return render(
         request, "home.html", lang, top=top, feed=feed, sources=sources, page=page,
         has_next=has_next, base_path=L["home"], title=L["home_title"], description=L["home_desc"],
@@ -248,6 +286,16 @@ def home_az(request: Request, page: int = PAGE):
     return home_page(request, "az", page)
 
 
+@app.get("/istochnik/{slug}", response_class=HTMLResponse)
+def source_ru(request: Request, slug: str, page: int = PAGE):
+    return source_page(request, "ru", slug, page)
+
+
+@app.get("/az/menbe/{slug}", response_class=HTMLResponse)
+def source_az(request: Request, slug: str, page: int = PAGE):
+    return source_page(request, "az", slug, page)
+
+
 @app.get("/rubrika/{slug}", response_class=HTMLResponse)
 def rubric(request: Request, slug: str, page: int = PAGE):
     return rubric_page(request, "ru", slug, page)
@@ -312,11 +360,14 @@ def sitemap():
             "SELECT id, slug, lang, last_at FROM stories WHERE source_count >= ? ORDER BY last_at DESC LIMIT 20000",
             (config.INDEX_MIN_SOURCES,),
         ).fetchall()
+    with db.session() as conn:
+        sources_by_lang = {code: active_sources(conn, code) for code in config.LANGS}
     urls = []
     for code in config.LANGS:
         L = config.I18N[code]
         urls.append(f"<url><loc>{config.SITE_URL}{L['home']}</loc></url>")
         urls += [f"<url><loc>{config.SITE_URL}{L['rubric']}{slug}</loc></url>" for slug, _ in L["rubrics"]]
+        urls += [f"<url><loc>{config.SITE_URL}{escape(s['path'])}</loc></url>" for s in sources_by_lang[code]]
     urls += [
         f"<url><loc>{config.SITE_URL}{escape(story_path(r))}</loc><lastmod>{r['last_at']}</lastmod></url>"
         for r in rows

@@ -104,3 +104,32 @@ def test_sync_sources_reads_language(tmp_path):
     collector.sync_sources(conn, path)
     rows = conn.execute("SELECT name, lang, title FROM sources ORDER BY id").fetchall()
     assert [tuple(r) for r in rows] == [("A", "ru", ""), ("A (az)", "az", "A")]
+
+
+def test_source_pages(conn):
+    ingest(conn, 1, item("Центробанк Азербайджана объявил курс маната на завтра", "https://a.az/1"))
+    ingest(conn, 1, item("В Баку открыли новую станцию метро для пассажиров", "https://a.az/2"))
+    ingest(conn, 2, item("Mərkəzi Bank sabah üçün manatın məzənnəsini açıqladı", "https://b.az/1"))
+    conn.commit()
+    from gapp.web import app
+
+    client = TestClient(app)
+    ru_home = client.get("/").text
+    assert 'href="/istochnik/istochnik"' in ru_home
+    az_home = client.get("/az").text
+    assert 'href="/az/menbe/menbe-1"' in az_home
+
+    page = client.get("/istochnik/istochnik")
+    assert page.status_code == 200
+    assert "Центробанк" in page.text and "станцию метро" in page.text and "Mərkəzi" not in page.text
+    assert 'content="index, follow' in page.text
+
+    az = client.get("/az/menbe/menbe-1")
+    assert az.status_code == 200 and "Mərkəzi Bank" in az.text and "Центробанк" not in az.text
+
+    assert client.get("/istochnik/menbe-1").status_code == 404
+    assert client.get("/az/menbe/istochnik").status_code == 404
+    assert client.get("/istochnik/net-takogo").status_code == 404
+
+    sitemap = client.get("/sitemap.xml").text
+    assert "/istochnik/istochnik" in sitemap and "/az/menbe/menbe-1" in sitemap
