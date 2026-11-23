@@ -362,7 +362,15 @@ _VIDEO_HOSTS = ("youtube.com", "youtube-nocookie.com", "youtu.be", "vimeo.com", 
                 "ok.ru", "vk.com", "vkvideo.ru", "dailymotion.com", "facebook.com/plugins/video",
                 "t.me", "tiktok.com", "instagram.com")
 _VIDEO_EXT = (".mp4", ".webm", ".m3u8", ".mov")
-_JUNK_MEDIA = re.compile(r"logo|icon|avatar|sprite|banner|pixel|spacer|blank|emoji|/ads?/|counter", re.I)
+_JUNK_MEDIA = re.compile(
+    r"logo|icon|avatar|sprite|banner|pixel|spacer|blank|emoji|counter|/ads?/|/adv/|advert|reklam|"
+    r"share|_btn|btn_|button|print|whatsapp|telegram|facebook|twitter|social|rss|arrow|bullet|"
+    r"placeholder|loading|loader|noimage|no-image|default[-_.]", re.I)
+
+
+def is_junk_media(url: str) -> bool:
+    """Значки, кнопки «поделиться», реклама: не фото статьи."""
+    return bool(_JUNK_MEDIA.search(url))
 MEDIA_LIMIT = 15
 
 
@@ -379,7 +387,7 @@ def _clean_media(found, base_url: str) -> list[dict]:
         if kind == "video":
             if not (any(host in url for host in _VIDEO_HOSTS) or path.endswith(_VIDEO_EXT)):
                 continue  # посторонние iframe: реклама, виджеты, счётчики
-        elif path.endswith((".svg", ".gif", ".ico")) or _JUNK_MEDIA.search(url):
+        elif path.endswith((".svg", ".gif", ".ico")) or is_junk_media(url):
             continue
         seen.add(url)
         result.append({"type": kind, "url": url})

@@ -229,3 +229,14 @@ def test_related_cards_are_not_article_media():
     _, media = scrape.article_content(RELATED_PAGE, "https://s.az/news/1")
     assert [m["url"] for m in media] == [
         "https://s.az/img/photo1.jpg", "https://s.az/img/photo2.jpg", "https://s.az/img/photo3.jpg"]
+
+
+def test_share_buttons_and_ads_are_not_media():
+    page = f"""<html><body><div><img src="/media/qaz.png"><p>{PARA}</p><p>{PARA}</p><p>{PARA}</p><p>{PARA}</p>
+<img src="/images/share_btn_wa.png"><img src="/images/share_btn_print.png"><img src="/adv/Azernews-Reklam.png"></div></body></html>"""
+    _, media = scrape.article_content(page, "https://s.az/news/1")
+    assert [m["url"] for m in media] == ["https://s.az/media/qaz.png"]
+    from gapp import web
+    old = [{"type": "image", "url": "https://s.az/media/qaz.png"},
+           {"type": "image", "url": "https://s.az/images/share_btn_tg.png"}]
+    assert [b["kind"] for b in web.full_blocks("a\nb", old)].count("image") == 1
