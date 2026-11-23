@@ -54,6 +54,10 @@ CREATE TABLE IF NOT EXISTS articles (
 CREATE UNIQUE INDEX IF NOT EXISTS articles_source_title ON articles(source_id, title_hash);
 CREATE INDEX IF NOT EXISTS articles_story ON articles(story_id);
 CREATE INDEX IF NOT EXISTS articles_published ON articles(published_at DESC);
+CREATE TABLE IF NOT EXISTS seen_urls (
+    url TEXT PRIMARY KEY,
+    seen_at TEXT NOT NULL
+);
 """
 
 
@@ -66,7 +70,20 @@ def connect(path: Path | str | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Добавляет столбцы, появившиеся после первого запуска."""
+    have = {row[1] for row in conn.execute("PRAGMA table_info(feeds)")}
+    for name, ddl in (
+        ("kind", "TEXT NOT NULL DEFAULT 'rss'"),   # rss, sitemap или html
+        ("pattern", "TEXT NOT NULL DEFAULT ''"),   # шаблон адреса статьи для html
+    ):
+        if name not in have:
+            conn.execute(f"ALTER TABLE feeds ADD COLUMN {name} {ddl}")
+    conn.commit()
 
 
 @contextmanager
