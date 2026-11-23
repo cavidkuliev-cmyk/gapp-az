@@ -1,28 +1,27 @@
 {% extends "base.html" %}
-{% set base_path = "/" %}
 {% block head %}<meta property="og:type" content="website">
-<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "WebSite", "name": "Gapp.az", "url": site_url ~ "/", "inLanguage": "ru", "potentialAction": {"@type": "SearchAction", "target": site_url ~ "/poisk?q={q}", "query-input": "required name=q"}} | tojson }}</script>{% endblock %}
+<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "WebSite", "name": "Gapp.az", "url": site_url ~ L.home, "inLanguage": lang, "potentialAction": {"@type": "SearchAction", "target": site_url ~ L.search ~ "?q={q}", "query-input": "required name=q"}} | tojson }}</script>{% endblock %}
 {% block content %}
 <main class="cols">
 {% if top and page == 1 %}
-<section class="top" aria-label="Главные новости">
-<h2 class="tag red">Главные новости</h2>
-<p class="muted" style="margin:0 0 8px">Сюжеты, о которых сейчас пишет больше всего изданий</p>
+<section class="top" aria-label="{{ L.top }}">
+<h2 class="tag red">{{ L.top }}</h2>
+<p class="muted" style="margin:0 0 8px">{{ L.top_note }}</p>
 {% for s in top %}
 <a class="item" href="{{ story_path(s) }}">
-<span class="muted">{{ rubric_names[s.rubric] }}</span>
+<span class="muted">{{ L.rubric_names[s.rubric] }}</span>
 <span class="t">{{ s.title }}</span>
-<span class="more">{{ s.source_count | sources_label }}</span>
+<span class="more">{{ s.source_count | sources_label(lang) }}</span>
 </a>
 {% endfor %}
 </section>
 {% endif %}
-<section class="feed" aria-label="Все новости">
-<h1 class="tag gray">Все новости</h1>
+<section class="feed" aria-label="{{ L.all }}">
+<h1 class="tag gray">{{ L.all }}</h1>
 {% include "_rows.html" %}
 </section>
-<aside class="side" aria-label="Источники">
-<h2 style="margin:0 0 8px;font-size:15px;text-transform:uppercase">Источники</h2>
+<aside class="side" aria-label="{{ L.sources }}">
+<h2 style="margin:0 0 8px;font-size:15px;text-transform:uppercase">{{ L.sources }}</h2>
 <ul>{% for src in sources %}<li><a href="{{ src.site }}" rel="noopener">{{ src.name }}</a></li>{% endfor %}</ul>
 </aside>
 </main>

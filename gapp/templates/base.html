@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="{{ L.html_lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,12 +7,14 @@
 <meta name="description" content="{{ description }}">
 <meta name="robots" content="{{ robots | default('index, follow, max-image-preview:large') }}">
 <link rel="canonical" href="{{ site_url }}{{ canonical }}">
-<link rel="alternate" type="application/rss+xml" title="Gapp.az" href="{{ site_url }}/rss.xml">
+<link rel="alternate" type="application/rss+xml" title="Gapp.az" href="{{ site_url }}{{ L.rss }}">
+{% if alternates %}{% for code, path in alternates.items() %}<link rel="alternate" hreflang="{{ code }}" href="{{ site_url }}{{ path }}">
+{% endfor %}{% endif %}
 <meta property="og:site_name" content="Gapp.az">
 <meta property="og:title" content="{{ title }}">
 <meta property="og:description" content="{{ description }}">
 <meta property="og:url" content="{{ site_url }}{{ canonical }}">
-<meta property="og:locale" content="ru_RU">
+<meta property="og:locale" content="{{ L.locale }}">
 {% block head %}<meta property="og:type" content="website">{% endblock %}
 <style>
 *{box-sizing:border-box}
@@ -26,6 +28,7 @@ a{color:inherit;text-decoration:none}a:hover{color:#1a5fd0}
 .nav a{padding:12px 0}.nav a.on{color:#1a5fd0}
 .search{display:flex;align-items:center;gap:8px;padding:10px 16px}
 .search input{width:170px;height:44px;padding:0 12px;border:1px solid #b8b8b8;border-radius:4px;font:inherit;font-size:14px}
+.lang{display:flex;align-items:center;gap:10px;padding:10px 16px 10px 0;font-size:14px;font-weight:700}.lang a{padding:12px 4px}.lang .on{color:#1a5fd0}
 .search button{height:44px;padding:0 14px;border:0;border-radius:4px;background:#1a6fe0;color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .cols{display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px;margin-top:16px}
 .top{flex:1 1 300px;max-width:420px;min-width:0;background:#fff;padding:16px}
@@ -51,29 +54,32 @@ a{color:inherit;text-decoration:none}a:hover{color:#1a5fd0}
 .side ul{list-style:none;margin:0;padding:0}.side li{padding:7px 0;border-top:1px solid #e3e3e3;font-size:14px}
 .foot{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px;padding:16px;background:#fff;color:#5c5c5c;font-size:13px}
 .foot span{flex-grow:1}
-@media(max-width:700px){.logo{width:100%;min-height:56px;font-size:26px}.nav{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap}.top,.side{max-width:none}.nav{flex:1 1 100%}.search{flex:1 1 100%;min-width:0}.search label{display:none}.search input{flex:1;width:auto;min-width:0}}
+@media(max-width:700px){.logo{width:100%;min-height:56px;font-size:26px}.nav{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap}.top,.side{max-width:none}.nav{flex:1 1 100%}.search{flex:1 1 0;min-width:0}.search label{display:none}.search input{flex:1;width:auto;min-width:0}}
 </style>
 </head>
 <body>
 <div class="wrap">
 <header class="head">
-<a class="logo" href="/" aria-label="Gapp.az, на главную">gapp.az<svg aria-hidden="true" width="34" height="10" viewBox="0 0 34 10"><path d="M3 2 Q17 12 31 2" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></a>
-<nav class="nav" aria-label="Рубрики">
-{% for slug, name in rubrics %}<a href="/rubrika/{{ slug }}"{% if active_rubric == slug %} class="on" aria-current="page"{% endif %}>{{ name }}</a>
+<a class="logo" href="{{ L.home }}" aria-label="{{ L.logo_label }}">gapp.az<svg aria-hidden="true" width="34" height="10" viewBox="0 0 34 10"><path d="M3 2 Q17 12 31 2" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></a>
+<nav class="nav" aria-label="{{ L.nav_label }}">
+{% for slug, name in L.rubrics %}<a href="{{ L.rubric }}{{ slug }}"{% if active_rubric == slug %} class="on" aria-current="page"{% endif %}>{{ name }}</a>
 {% endfor %}</nav>
-<form class="search" role="search" action="/poisk" method="get">
-<label class="muted" for="q">Поиск</label>
-<input id="q" name="q" type="search" maxlength="100" value="{{ query | default('') }}" placeholder="по новостям">
-<button type="submit">Найти</button>
+<form class="search" role="search" action="{{ L.search }}" method="get">
+<label class="muted" for="q">{{ L.search_word }}</label>
+<input id="q" name="q" type="search" maxlength="100" value="{{ query | default('') }}" placeholder="{{ L.search_placeholder }}">
+<button type="submit">{{ L.find }}</button>
 </form>
+<nav class="lang" aria-label="Язык / Dil">
+{% for code in ("ru", "az") %}<a href="{{ (alternates or {}).get(code, i18n[code].home) }}" lang="{{ code }}"{% if code == lang %} class="on" aria-current="true"{% endif %}>{{ code | upper }}</a>
+{% endfor %}</nav>
 </header>
 {% block content %}{% endblock %}
 <footer class="foot">
-<span>Gapp.az собирает новости азербайджанских изданий и ведёт на сайт источника</span>
-<a href="/o-proekte">О проекте</a>
-<a href="/o-proekte#pravo">Правообладателям</a>
-<a href="/bot">О боте</a>
-<a href="/rss.xml">RSS</a>
+<span>{{ L.foot }}</span>
+<a href="{{ L.about }}">{{ L.about_link }}</a>
+<a href="{{ L.about }}#pravo">{{ L.rights }}</a>
+<a href="{{ L.about }}#bot">{{ L.bot }}</a>
+<a href="{{ L.rss }}">RSS</a>
 </footer>
 </div>
 </body>

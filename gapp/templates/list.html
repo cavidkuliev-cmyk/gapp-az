@@ -3,7 +3,7 @@
 <main class="cols">
 <section class="feed" aria-label="{{ heading }}">
 <h1 class="tag gray">{{ heading }}</h1>
-{% if query is defined and query | length < 3 %}<p class="muted">Введите не меньше трёх букв.</p>
+{% if query is defined and query | length < 3 %}<p class="muted">{{ L.min_query }}</p>
 {% else %}{% include "_rows.html" %}{% endif %}
 </section>
 </main>

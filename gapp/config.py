@@ -31,3 +31,72 @@ RUBRIC_NAMES = dict(RUBRICS)
 
 # Сколько страниц статей можно скачать с одного сайта за обход (для сайтов без RSS).
 PAGE_FETCH_LIMIT = int(os.environ.get("GAPP_PAGE_FETCH_LIMIT", "10"))
+
+# --- Языковые версии сайта: русская в корне, азербайджанская в /az ---
+LANGS = ("ru", "az")
+
+RUBRICS_AZ = [
+    ("politika", "Siyasət"),
+    ("obshestvo", "Cəmiyyət"),
+    ("proisshestviya", "Hadisə"),
+    ("ekonomika", "İqtisadiyyat"),
+    ("kultura", "Mədəniyyət"),
+    ("nauka", "Elm və texnologiya"),
+    ("sport", "İdman"),
+    ("internet", "İnternet"),
+    ("avto", "Avto"),
+    ("raznoe", "Digər"),
+]
+
+I18N = {
+    "ru": {
+        "html_lang": "ru", "locale": "ru_RU", "other": "az",
+        "rubrics": RUBRICS, "rubric_names": RUBRIC_NAMES,
+        # адреса разделов
+        "home": "/", "rubric": "/rubrika/", "story": "/novost/", "search": "/poisk",
+        "about": "/o-proekte", "rss": "/rss.xml",
+        # тексты
+        "home_title": "Gapp.az: новости Азербайджана из всех изданий",
+        "home_desc": "Свежие новости Азербайджана на русском языке из ведущих изданий в одной ленте.",
+        "rubric_title": "{name}: новости Азербайджана | Gapp.az",
+        "rubric_desc": "Новости рубрики «{name}» из азербайджанских изданий на русском языке.",
+        "rss_desc": "Новости Азербайджана из всех изданий",
+        "search_title": "Поиск по новостям | Gapp.az", "search_desc": "Поиск по новостям Gapp.az.",
+        "about_title": "О проекте | Gapp.az",
+        "about_desc": "Что такое Gapp.az, как собираются новости и как связаться с нами.",
+        "logo_label": "Gapp.az, на главную", "nav_label": "Рубрики",
+        "search_word": "Поиск", "search_placeholder": "по новостям", "find": "Найти",
+        "top": "Главные новости", "top_note": "Сюжеты, о которых сейчас пишет больше всего изданий",
+        "all": "Все новости", "sources": "Источники", "empty": "Пока здесь нет новостей.",
+        "pages": "Страницы", "newer": "Новее", "more": "Показать ещё", "also": "ещё",
+        "min_query": "Введите не меньше трёх букв.", "main": "Главная", "crumbs": "Навигация",
+        "who": "Кто об этом пишет", "read_at": "Читать на сайте {name}", "photo": "Фото",
+        "related_label": "Ещё по теме", "related": "{name}: ещё новости",
+        "foot": "Gapp.az собирает новости азербайджанских изданий и ведёт на сайт источника",
+        "about_link": "О проекте", "rights": "Правообладателям", "bot": "О боте",
+    },
+    "az": {
+        "html_lang": "az", "locale": "az_AZ", "other": "ru",
+        "rubrics": RUBRICS_AZ, "rubric_names": dict(RUBRICS_AZ),
+        "home": "/az", "rubric": "/az/rubrika/", "story": "/az/xeber/", "search": "/az/axtar",
+        "about": "/az/haqqinda", "rss": "/az/rss.xml",
+        "home_title": "Gapp.az: bütün nəşrlərdən Azərbaycan xəbərləri",
+        "home_desc": "Aparıcı nəşrlərdən ən son Azərbaycan xəbərləri bir lentdə.",
+        "rubric_title": "{name}: Azərbaycan xəbərləri | Gapp.az",
+        "rubric_desc": "Azərbaycan nəşrlərindən «{name}» rubrikasının xəbərləri.",
+        "rss_desc": "Bütün nəşrlərdən Azərbaycan xəbərləri",
+        "search_title": "Xəbərlərdə axtarış | Gapp.az", "search_desc": "Gapp.az xəbərlərində axtarış.",
+        "about_title": "Layihə haqqında | Gapp.az",
+        "about_desc": "Gapp.az nədir, xəbərlər necə toplanır və bizimlə necə əlaqə saxlamaq olar.",
+        "logo_label": "Gapp.az, ana səhifə", "nav_label": "Rubrikalar",
+        "search_word": "Axtarış", "search_placeholder": "xəbərlərdə", "find": "Axtar",
+        "top": "Əsas xəbərlər", "top_note": "Hazırda ən çox nəşrin yazdığı mövzular",
+        "all": "Bütün xəbərlər", "sources": "Mənbələr", "empty": "Hələlik burada xəbər yoxdur.",
+        "pages": "Səhifələr", "newer": "Daha yeni", "more": "Daha çox", "also": "daha",
+        "min_query": "Ən azı üç hərf daxil edin.", "main": "Ana səhifə", "crumbs": "Naviqasiya",
+        "who": "Bu barədə kim yazır", "read_at": "{name} saytında oxu", "photo": "Foto",
+        "related_label": "Mövzu üzrə", "related": "{name}: digər xəbərlər",
+        "foot": "Gapp.az Azərbaycan nəşrlərinin xəbərlərini toplayır və mənbənin saytına yönləndirir",
+        "about_link": "Layihə haqqında", "rights": "Müəllif hüququ sahiblərinə", "bot": "Bot haqqında",
+    },
+}

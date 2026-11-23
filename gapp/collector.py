@@ -13,10 +13,11 @@ import yaml
 
 from . import config, db, scrape
 from .textutil import (
+    LANGS,
     canonical_url,
     clean_text,
     detect_rubric,
-    is_russian,
+    is_lang,
     make_summary,
     similarity,
     slugify,
@@ -49,10 +50,14 @@ def sync_sources(conn: sqlite3.Connection, path=None) -> None:
         if src.get("enabled", True) is False:
             continue
         enabled_names.add(src["name"])
+        lang = src.get("lang", "ru")
+        if lang not in LANGS:
+            raise ValueError(f"{src['name']}: неизвестный язык {lang!r}")
         conn.execute(
-            "INSERT INTO sources(name, site) VALUES(?, ?) "
-            "ON CONFLICT(name) DO UPDATE SET site=excluded.site, active=1",
-            (src["name"], src["site"]),
+            "INSERT INTO sources(name, site, lang, title) VALUES(?, ?, ?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET site=excluded.site, lang=excluded.lang, "
+            "title=excluded.title, active=1",
+            (src["name"], src["site"], lang, src.get("title", "")),
         )
         source_id = conn.execute("SELECT id FROM sources WHERE name=?", (src["name"],)).fetchone()[0]
         for feed in src.get("feeds", []):
@@ -109,14 +114,14 @@ def _turbo_title(entry) -> str:
     return clean_text(match.group(1)) if match else ""
 
 
-def entry_to_item(entry, now: datetime) -> dict | None:
+def entry_to_item(entry, now: datetime, lang: str = "ru") -> dict | None:
     """Превращает запись ленты в словарь статьи или None, если она не подходит."""
     title = clean_text(entry.get("title")) or _turbo_title(entry)
     url = canonical_url(entry.get("link") or "")
     if not title or not url:
         return None
     summary = make_summary(entry.get("summary") or entry.get("description"))
-    if not is_russian(title + " " + summary):
+    if not is_lang(title + " " + summary, lang):
         return None
     published = _entry_time(entry, now)
     if now - published > timedelta(days=MAX_AGE_DAYS):
@@ -132,14 +137,16 @@ def entry_to_item(entry, now: datetime) -> dict | None:
     }
 
 
-def _find_story(conn, tokens: set[str], published: datetime) -> int | None:
-    """Ищет сюжет с похожим заголовком среди статей за последние часы."""
+def _find_story(conn, tokens: set[str], published: datetime, lang: str = "ru") -> int | None:
+    """Ищет сюжет с похожим заголовком среди статей на том же языке за последние часы."""
     if len(tokens) < MIN_COMMON_TOKENS:
         return None
     since = iso(published - timedelta(hours=config.STORY_WINDOW_HOURS))
     best_id, best_score = None, 0.0
     rows = conn.execute(
-        "SELECT story_id, tokens FROM articles WHERE published_at >= ?", (since,)
+        "SELECT a.story_id, a.tokens FROM articles a JOIN stories st ON st.id = a.story_id "
+        "WHERE a.published_at >= ? AND st.lang = ?",
+        (since, lang),
     )
     for row in rows:
         other = set(row["tokens"].split())
@@ -164,14 +171,16 @@ def ingest(conn: sqlite3.Connection, source_id: int, item: dict, now: datetime |
 
     tokens = title_tokens(item["title"])
     published = item["published_at"]
-    source_name = conn.execute("SELECT name FROM sources WHERE id=?", (source_id,)).fetchone()[0]
-    story_id = _find_story(conn, tokens, published)
+    source_name, lang = conn.execute(
+        "SELECT COALESCE(NULLIF(title, ''), name), lang FROM sources WHERE id=?", (source_id,)
+    ).fetchone()
+    story_id = _find_story(conn, tokens, published, lang)
     result = "joined"
     if story_id is None:
         result = "new"
         cur = conn.execute(
-            "INSERT INTO stories(slug, title, summary, image, rubric, first_at, last_at, main_source) "
-            "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO stories(slug, title, summary, image, rubric, first_at, last_at, main_source, lang) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 slugify(item["title"]),
                 item["title"],
@@ -181,6 +190,7 @@ def ingest(conn: sqlite3.Connection, source_id: int, item: dict, now: datetime |
                 iso(published),
                 iso(published),
                 source_name,
+                lang,
             ),
         )
         story_id = cur.lastrowid
@@ -259,7 +269,7 @@ def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
             continue
         if cand["date"] and now - cand["date"] > timedelta(days=MAX_AGE_DAYS):
             continue
-        if cand["lang"] and not cand["lang"].startswith("ru"):
+        if cand["lang"] and not cand["lang"].startswith(feed["lang"]):
             continue
         meta = {"title": cand["title"], "summary": "", "image": cand["image"], "date": cand["date"]}
         if not (cand["title"] and cand["date"]):
@@ -292,7 +302,7 @@ def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
         published = min(meta["date"] or now, now)
         if (
             not meta["title"]
-            or not is_russian(meta["title"] + " " + meta["summary"])
+            or not is_lang(meta["title"] + " " + meta["summary"], feed["lang"])
             or now - published > timedelta(days=MAX_AGE_DAYS)
         ):
             yield None
@@ -338,7 +348,7 @@ def collect_once(conn: sqlite3.Connection, client: httpx.Client | None = None) -
     conn.execute("DELETE FROM seen_urls WHERE seen_at < ?", (iso(now_utc() - timedelta(days=30)),))
     try:
         feeds = conn.execute(
-            "SELECT f.*, s.name AS source_name FROM feeds f JOIN sources s ON s.id = f.source_id "
+            "SELECT f.*, s.name AS source_name, s.lang AS lang FROM feeds f JOIN sources s ON s.id = f.source_id "
             "WHERE s.active = 1"
         ).fetchall()
         for feed in feeds:
@@ -363,7 +373,7 @@ def collect_once(conn: sqlite3.Connection, client: httpx.Client | None = None) -
             if body and feed["kind"] == "rss":
                 parsed = feedparser.parse(body)
                 for entry in parsed.entries:
-                    item = entry_to_item(entry, now)
+                    item = entry_to_item(entry, now, feed["lang"])
                     if item is None:
                         stats["skipped"] += 1
                         continue
