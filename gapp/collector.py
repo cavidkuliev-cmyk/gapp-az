@@ -297,9 +297,12 @@ def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
 def fetch_feed(client: httpx.Client, feed) -> tuple[str, bytes | None, dict]:
     """Скачивает ленту с условным запросом. Возвращает (статус, тело, заголовки кеша)."""
     headers = {}
-    if feed["etag"]:
+    # Условный запрос только для RSS. Карту сайта и страницу раздела читаем каждый раз:
+    # за обход берётся ограниченное число статей, остаток добирается следующими обходами.
+    conditional = feed["kind"] == "rss"
+    if conditional and feed["etag"]:
         headers["If-None-Match"] = feed["etag"]
-    if feed["last_modified"]:
+    if conditional and feed["last_modified"]:
         headers["If-Modified-Since"] = feed["last_modified"]
     resp = client.get(feed["url"], headers=headers)
     if resp.status_code == 304:
