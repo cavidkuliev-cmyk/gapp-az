@@ -46,9 +46,8 @@ sources:
     site: https://zerkalo.az
     feeds: [https://zerkalo.az/feed/]
   - name: Caliber.az
-    enabled: false  # страницы отвечают 403, открытая лента rss.xml не на русском, проверено 23.11.2026
     site: https://caliber.az
-    feeds: [https://caliber.az/rss]
+    feeds: [https://caliber.az/rss.xml]  # лента Яндекс.Турбо: заголовок берётся из turbo:content
   - name: Интерфакс-Азербайджан
     enabled: false  # сайт не отвечает, проверено 23.11.2026
     site: https://interfax.az
