@@ -82,11 +82,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("sources", "lang", "TEXT NOT NULL DEFAULT 'ru'"),   # язык источника: ru или az
         ("sources", "title", "TEXT NOT NULL DEFAULT ''"),    # имя для показа, если отличается от name
         ("stories", "lang", "TEXT NOT NULL DEFAULT 'ru'"),
+        # Полный текст статьи: хранится для анализа, на сайте не показывается.
+        ("articles", "body", "TEXT NOT NULL DEFAULT ''"),
+        # '' ещё не пробовали, feed из ленты, page со страницы, blocked сайт не пускает, failed не вышло
+        ("articles", "body_status", "TEXT NOT NULL DEFAULT ''"),
     ):
         have = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if name not in have:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
     conn.execute("CREATE INDEX IF NOT EXISTS stories_lang ON stories(lang, last_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS articles_body_todo ON articles(published_at DESC) "
+                 "WHERE body_status = ''")
     conn.commit()
 
 

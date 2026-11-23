@@ -32,6 +32,14 @@ RUBRIC_NAMES = dict(RUBRICS)
 # Сколько страниц статей можно скачать с одного сайта за обход (для сайтов без RSS).
 PAGE_FETCH_LIMIT = int(os.environ.get("GAPP_PAGE_FETCH_LIMIT", "10"))
 
+# Сохранять ли полный текст статей в базе (для анализа, на сайте не показывается).
+FETCH_BODIES = os.environ.get("GAPP_FETCH_BODIES", "1") not in ("0", "false", "no", "")
+# Сколько страниц статей можно скачать ради текста за обход: с одного сайта и всего.
+BODY_FETCH_PER_SITE = int(os.environ.get("GAPP_BODY_FETCH_PER_SITE", "4"))
+BODY_FETCH_PER_PASS = int(os.environ.get("GAPP_BODY_FETCH_PER_PASS", "40"))
+# Текст добирается только для статей не старше этого числа часов.
+BODY_MAX_AGE_HOURS = int(os.environ.get("GAPP_BODY_MAX_AGE_HOURS", "48"))
+
 # --- Языковые версии сайта: русская в корне, азербайджанская в /az ---
 LANGS = ("ru", "az")
 

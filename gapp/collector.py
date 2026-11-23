@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 
 import feedparser
 import httpx
@@ -127,7 +128,17 @@ def entry_to_item(entry, now: datetime, lang: str = "ru") -> dict | None:
     if now - published > timedelta(days=MAX_AGE_DAYS):
         return None
     categories = [t.get("term", "") for t in entry.get("tags") or []]
+    content = entry.get("content") or []
+    body = max(
+        (scrape.feed_body(raw) for raw in (
+            content[0].get("value") if content else "",
+            entry.get("turbo_content"),
+            entry.get("yandex_full-text"),
+        )),
+        key=len,
+    )
     return {
+        "body": body,
         "title": title,
         "url": url,
         "summary": summary,
@@ -197,7 +208,7 @@ def ingest(conn: sqlite3.Connection, source_id: int, item: dict, now: datetime |
 
     conn.execute(
         "INSERT INTO articles(source_id, story_id, url, title, title_hash, tokens, summary, image, "
-        "rubric, published_at, fetched_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "rubric, published_at, fetched_at, body, body_status) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             source_id,
             story_id,
@@ -210,6 +221,8 @@ def ingest(conn: sqlite3.Connection, source_id: int, item: dict, now: datetime |
             item["rubric"],
             iso(published),
             iso(now),
+            item.get("body", ""),
+            item.get("body_status") or ("feed" if item.get("body") else ""),
         ),
     )
     if result == "joined":
@@ -272,6 +285,7 @@ def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
         if cand["lang"] and not cand["lang"].startswith(feed["lang"]):
             continue
         meta = {"title": cand["title"], "summary": "", "image": cand["image"], "date": cand["date"]}
+        body, body_status = "", ""
         if not (cand["title"] and cand["date"]):
             # В карте нет заголовка: читаем страницу статьи, но не больше лимита за обход.
             if fetched >= config.PAGE_FETCH_LIMIT:
@@ -290,6 +304,9 @@ def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
                 yield None
                 continue
             page = scrape.article_meta(resp.text)
+            if config.FETCH_BODIES:  # страница уже скачана: второй раз за текстом не ходим
+                body = scrape.article_body(resp.text)
+                body_status = "page" if body else "failed"
             if feed["kind"] == "html" and not (page["date"] or page["type"] == "article"):
                 yield None  # это не статья, а раздел или служебная страница
                 continue
@@ -311,7 +328,58 @@ def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
             "title": meta["title"], "url": url, "summary": meta["summary"],
             "image": meta["image"] if meta["image"].startswith(("http://", "https://")) else "",
             "rubric": detect_rubric([], url), "published_at": published,
+            "body": body, "body_status": body_status,
         }
+
+
+def fill_bodies(conn, client, robots, now: datetime) -> dict:
+    """Добирает полный текст свежих статей со страниц изданий.
+
+    Текст нужен для анализа и на сайте не показывается. Сайты, которые запрещают
+    бота в robots.txt или отвечают 401/403, не запрашиваются повторно.
+    """
+    stats = {"body_saved": 0, "body_failed": 0}
+    since = iso(now - timedelta(hours=config.BODY_MAX_AGE_HOURS))
+    rows = conn.execute(
+        "SELECT id, url FROM articles WHERE body_status = '' AND published_at >= ? "
+        "ORDER BY published_at DESC LIMIT 2000",
+        (since,),
+    ).fetchall()
+    per_host: dict[str, int] = {}
+    blocked: set[str] = set()
+    total = 0
+    for row in rows:
+        if total >= config.BODY_FETCH_PER_PASS:
+            break
+        host = urlsplit(row["url"]).netloc
+        if host in blocked:
+            conn.execute("UPDATE articles SET body_status = 'blocked' WHERE id = ?", (row["id"],))
+            continue
+        if per_host.get(host, 0) >= config.BODY_FETCH_PER_SITE:
+            continue
+        if not robots.allowed(row["url"]):
+            blocked.add(host)
+            conn.execute("UPDATE articles SET body_status = 'blocked' WHERE id = ?", (row["id"],))
+            continue
+        per_host[host] = per_host.get(host, 0) + 1
+        total += 1
+        body, status = "", "failed"
+        try:
+            resp = client.get(row["url"])
+            if resp.status_code in (401, 403):
+                status = "blocked"
+                blocked.add(host)
+            elif resp.status_code == 200 and len(resp.content) <= MAX_FEED_BYTES:
+                body = scrape.article_body(resp.text)
+                status = "page" if body else "failed"
+        except httpx.HTTPError:
+            pass
+        finally:
+            time.sleep(1)
+        conn.execute("UPDATE articles SET body = ?, body_status = ? WHERE id = ?", (body, status, row["id"]))
+        stats["body_saved" if body else "body_failed"] += 1
+    conn.commit()
+    return stats
 
 
 def fetch_feed(client: httpx.Client, feed) -> tuple[str, bytes | None, dict]:
@@ -386,6 +454,8 @@ def collect_once(conn: sqlite3.Connection, client: httpx.Client | None = None) -
                     stats[ingest(conn, feed["source_id"], item, now)] += 1
             conn.commit()
             time.sleep(1)  # вежливая пауза между запросами
+        if config.FETCH_BODIES:
+            stats.update(fill_bodies(conn, client, robots, now_utc()))
     finally:
         if own_client:
             client.close()

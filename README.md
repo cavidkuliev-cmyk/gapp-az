@@ -64,3 +64,11 @@ Caddy сам получит сертификат HTTPS. Для другого д
 ## Настройки
 
 Переменные окружения: `GAPP_DB`, `GAPP_SOURCES`, `GAPP_SITE_URL`, `GAPP_USER_AGENT`, `GAPP_POLL_INTERVAL`, `GAPP_STORY_WINDOW_HOURS`, `GAPP_STORY_SIMILARITY`, `GAPP_INDEX_MIN_SOURCES`, `GAPP_PAGE_FETCH_LIMIT`. Значения по умолчанию смотрите в `gapp/config.py`.
+
+## Полный текст статей
+
+Сборщик сохраняет полный текст каждой статьи в столбце `articles.body` базы. Текст нужен для анализа и на сайте не показывается: на страницах остаются заголовок, короткий анонс и ссылка на источник.
+
+Текст берётся из ленты, если издание отдаёт его там, иначе со страницы статьи: не больше `GAPP_BODY_FETCH_PER_SITE` (4) страниц с сайта и `GAPP_BODY_FETCH_PER_PASS` (40) всего за обход, только для статей не старше 48 часов. Сайты, которые запрещают бота в robots.txt или отвечают 403, не запрашиваются. Отключить: `GAPP_FETCH_BODIES=0`.
+
+Сводка по источникам: `docker compose exec collector python -m gapp.body_stats`.

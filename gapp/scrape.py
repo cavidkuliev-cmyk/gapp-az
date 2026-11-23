@@ -243,6 +243,115 @@ def article_meta(html: str) -> dict:
     return result
 
 
+_SKIP_TAGS = {"script", "style", "noscript", "nav", "footer", "header", "aside", "form",
+              "figure", "figcaption", "button", "select", "iframe", "svg", "template"}
+_BLOCK_TAGS = {"div", "article", "section", "main", "td", "body"}
+_VOID_TAGS = {"br", "img", "hr", "input", "meta", "link", "source", "wbr", "area", "base", "col",
+              "embed", "param", "track"}
+
+
+class _BodyParser(HTMLParser):
+    """Собирает абзацы <p> по блокам-родителям, чтобы найти блок с текстом статьи."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, int]] = []   # (тег, номер блока или 0)
+        self.blocks: dict[int, list[str]] = {}
+        self._next = 0
+        self._skip = 0
+        self._para: list[str] | None = None
+
+    def _block(self) -> int:
+        for tag, block in reversed(self.stack):
+            if block:
+                return block
+        return 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in _VOID_TAGS:
+            if tag == "br" and self._para is not None:
+                self._para.append(" ")
+            return
+        block = 0
+        if tag in _BLOCK_TAGS:
+            self._next += 1
+            block = self._next
+        self.stack.append((tag, block))
+        if tag in _SKIP_TAGS:
+            self._skip += 1
+        elif tag == "p" and not self._skip:
+            self._flush()
+            self._para = []
+
+    def _flush(self):
+        if self._para is not None:
+            text = clean_text("".join(self._para))
+            if len(text) >= 2:
+                self.blocks.setdefault(self._block(), []).append(text)
+        self._para = None
+
+    def handle_endtag(self, tag):
+        if tag in _VOID_TAGS:
+            return
+        if tag == "p":
+            self._flush()
+        for pos in range(len(self.stack) - 1, -1, -1):
+            if self.stack[pos][0] == tag:
+                for closed, _ in self.stack[pos:]:
+                    if closed in _SKIP_TAGS:
+                        self._skip -= 1
+                    if closed == "p":
+                        self._flush()
+                del self.stack[pos:]
+                break
+
+    def handle_data(self, data):
+        if self._para is not None and not self._skip:
+            self._para.append(data)
+
+
+def article_body(html: str, limit: int = 30000) -> str:
+    """Полный текст статьи со страницы: абзацы через перевод строки или пустая строка.
+
+    Сначала берётся articleBody из JSON-LD, иначе блок страницы, в котором
+    больше всего текста в абзацах <p>.
+    """
+    meta = _MetaParser()
+    try:
+        meta.feed(html)
+    except Exception:
+        pass
+    for node in _jsonld_articles(meta.jsonld):
+        body = node.get("articleBody")
+        if isinstance(body, str) and len(clean_text(body)) >= 200:
+            parts = [clean_text(part) for part in re.split(r"(?:\r?\n)+|</p>", body)]
+            return "\n".join(part for part in parts if part)[:limit]
+    parser = _BodyParser()
+    try:
+        parser.feed(html)
+        parser._flush()
+    except Exception:
+        pass
+    if not parser.blocks:
+        return ""
+    best = max(parser.blocks.values(), key=lambda paras: sum(len(p) for p in paras))
+    text = "\n".join(best)
+    return text[:limit] if len(text) >= 200 else ""
+
+
+def feed_body(value: str | None, limit: int = 30000) -> str:
+    """Полный текст из поля ленты (content:encoded, turbo:content, yandex:full-text)."""
+    if not value:
+        return ""
+    value = re.sub(r"<(header|figure|script|style)\b.*?</\1\s*>", " ", value, flags=re.S | re.I)
+    if "<p" in value.lower():
+        paras = [clean_text(part) for part in re.split(r"</p\s*>|<br\s*/?>\s*<br\s*/?>", value, flags=re.I)]
+    else:
+        paras = [clean_text(part) for part in re.split(r"(?:\r?\n)+", value)]
+    text = "\n".join(part for part in paras if part)
+    return text[:limit] if len(text) >= 200 else ""
+
+
 class Robots:
     """Правила robots.txt по сайтам. Запрещённые адреса сборщик не запрашивает."""
 
