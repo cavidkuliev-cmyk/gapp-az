@@ -48,6 +48,9 @@ sources:
   - name: Caliber.az
     site: https://caliber.az
     feeds: [https://caliber.az/rss.xml]  # лента Яндекс.Турбо: заголовок берётся из turbo:content
+  - name: Baku.ws
+    site: https://baku.ws/ru
+    feeds: [https://baku.ws/ru/rss]
   - name: Интерфакс-Азербайджан
     enabled: false  # сайт не отвечает, проверено 23.11.2026
     site: https://interfax.az
