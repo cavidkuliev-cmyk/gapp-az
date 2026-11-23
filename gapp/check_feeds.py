@@ -32,7 +32,7 @@ def main() -> None:
                               f"({kind})  {url}")
                         continue
                     entries = feedparser.parse(resp.content).entries if resp.status_code == 200 else []
-                    good = sum(1 for e in entries if entry_to_item(e, now_utc()))
+                    good = sum(1 for e in entries if entry_to_item(e, now_utc(), src.get("lang", "ru")))
                     print(f"{src['name']:<24} {resp.status_code}  записей: {len(entries):>3}  "
                           f"подходящих: {good:>3}  {url}")
                 except httpx.HTTPError as exc:

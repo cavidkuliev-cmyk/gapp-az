@@ -1,4 +1,4 @@
-# Русскоязычные ленты азербайджанских СМИ.
+# Ленты азербайджанских СМИ: сначала русскоязычные, ниже азербайджаноязычные (lang: az).
 # Проверено на сервере 23.11.2026 командой `python -m gapp.check_feeds`.
 # Источники с `enabled: false` не опрашиваются. Чтобы вернуть источник,
 # исправьте адрес ленты и уберите эту строку.
@@ -55,3 +55,72 @@ sources:
     enabled: false  # сайт не отвечает, проверено 23.11.2026
     site: https://interfax.az
     feeds: [https://interfax.az/rss]
+
+  # --- Азербайджанская версия (раздел /az). Проверено на сервере 23.11.2026. ---
+  # name должен быть уникальным; title задаёт имя для показа, если оно совпадает с русским источником.
+  - name: Report (az)
+    title: Report
+    lang: az
+    site: https://report.az
+    feeds: [https://report.az/rss]
+  - name: APA (az)
+    title: APA
+    lang: az
+    site: https://apa.az
+    feeds: [https://apa.az/rss]
+  - name: Trend (az)
+    title: Trend
+    lang: az
+    site: https://az.trend.az
+    feeds:
+      - https://az.trend.az/rss
+      - url: https://az.trend.az/sitemap_news.php
+        type: sitemap
+  - name: Oxu.az (az)
+    title: Oxu.az
+    lang: az
+    site: https://oxu.az
+    feeds: [https://oxu.az/feed]
+  - name: Baku.ws (az)
+    title: Baku.ws
+    lang: az
+    site: https://baku.ws
+    feeds: [https://baku.ws/rss]
+  - name: Milli.az
+    lang: az
+    site: https://milli.az
+    feeds:
+      - https://milli.az/rss/all.rss
+      - url: https://milli.az/sitemap-news.xml
+        type: sitemap
+  - name: Qafqazinfo
+    lang: az
+    site: https://qafqazinfo.az
+    feeds: [https://qafqazinfo.az/rss]
+  - name: Modern.az
+    lang: az
+    site: https://modern.az
+    feeds: [https://modern.az/feed]
+  - name: Lent.az
+    lang: az
+    site: https://lent.az
+    feeds: [https://lent.az/rss]
+  - name: Publika.az
+    lang: az
+    site: https://publika.az
+    feeds: [https://publika.az/rss/]
+  - name: Azxeber
+    lang: az
+    site: https://azxeber.com
+    feeds: [https://azxeber.com/rss]
+  - name: Xəzər Xəbər
+    lang: az
+    site: https://xezerxeber.az
+    feeds: [https://xezerxeber.az/rss.xml]
+  - name: Banker.az
+    lang: az
+    site: https://banker.az
+    feeds: [https://banker.az/feed/]
+  # Не подключены: Musavat, Metbuat.az, Unikal.az (robots.txt запрещает бота); Caliber.az/az (403);
+  # Yeni Sabah, Teleqraf (способ не найден); 1news.az/az (общая карта с русской версией);
+  # Axar.az, SİA, Marja.az, Sonxeber.az (нет RSS, только страницы: отложены).
