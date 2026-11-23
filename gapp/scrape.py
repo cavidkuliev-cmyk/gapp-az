@@ -371,7 +371,7 @@ _JUNK_MEDIA = re.compile(
 def is_junk_media(url: str) -> bool:
     """Значки, кнопки «поделиться», реклама: не фото статьи."""
     return bool(_JUNK_MEDIA.search(url))
-MEDIA_LIMIT = 15
+MEDIA_LIMIT = 30
 
 
 def _clean_media(found, base_url: str) -> list[dict]:
