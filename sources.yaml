@@ -1,0 +1,48 @@
+# Русскоязычные ленты азербайджанских СМИ.
+# ВНИМАНИЕ: адреса лент записаны по памяти и НЕ проверены.
+# Перед запуском выполните `python -m gapp.check_feeds` на сервере
+# и исправьте или удалите ленты, которые не отвечают.
+# Сборщик пропускает нерабочие ленты и не падает из-за них.
+sources:
+  - name: Day.az
+    site: https://news.day.az
+    feeds: [https://news.day.az/rss/all.rss]
+  - name: Trend
+    site: https://www.trend.az
+    feeds: [https://www.trend.az/feeds/index.rss]
+  - name: Report
+    site: https://report.az/ru
+    feeds: [https://report.az/ru/rss]
+  - name: АПА
+    site: https://ru.apa.az
+    feeds: [https://ru.apa.az/rss]
+  - name: АЗЕРТАДЖ
+    site: https://azertag.az/ru
+    feeds: [https://azertag.az/ru/rss]
+  - name: 1news.az
+    site: https://1news.az
+    feeds: [https://1news.az/rss.xml]
+  - name: Haqqin.az
+    site: https://haqqin.az
+    feeds: [https://haqqin.az/rss]
+  - name: Minval
+    site: https://minval.az
+    feeds: [https://minval.az/feed]
+  - name: Media.az
+    site: https://media.az
+    feeds: [https://media.az/rss]
+  - name: Oxu.az
+    site: https://ru.oxu.az
+    feeds: [https://ru.oxu.az/rss]
+  - name: Vesti.az
+    site: https://vesti.az
+    feeds: [https://vesti.az/rss]
+  - name: Зеркало
+    site: https://zerkalo.az
+    feeds: [https://zerkalo.az/feed/]
+  - name: Caliber.az
+    site: https://caliber.az
+    feeds: [https://caliber.az/rss]
+  - name: Интерфакс-Азербайджан
+    site: https://interfax.az
+    feeds: [https://interfax.az/rss]

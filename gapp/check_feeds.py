@@ -1,0 +1,31 @@
+"""Проверка лент из sources.yaml: `python -m gapp.check_feeds`."""
+import feedparser
+import httpx
+import yaml
+
+from . import config
+from .collector import entry_to_item, now_utc
+
+
+def main() -> None:
+    with open(config.SOURCES_PATH, encoding="utf-8") as fh:
+        sources = (yaml.safe_load(fh) or {}).get("sources", [])
+    with httpx.Client(
+        headers={"User-Agent": config.USER_AGENT}, timeout=20, follow_redirects=True
+    ) as client:
+        for src in sources:
+            if src.get("enabled", True) is False:
+                continue
+            for url in src.get("feeds", []):
+                try:
+                    resp = client.get(url)
+                    entries = feedparser.parse(resp.content).entries if resp.status_code == 200 else []
+                    good = sum(1 for e in entries if entry_to_item(e, now_utc()))
+                    print(f"{src['name']:<24} {resp.status_code}  записей: {len(entries):>3}  "
+                          f"подходящих: {good:>3}  {url}")
+                except httpx.HTTPError as exc:
+                    print(f"{src['name']:<24} ОШИБКА {type(exc).__name__}  {url}")
+
+
+if __name__ == "__main__":
+    main()

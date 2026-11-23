@@ -1,0 +1,32 @@
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    environment:
+      GAPP_SITE_URL: https://${GAPP_DOMAIN:-gapp.az}
+    volumes:
+      - data:/data
+  collector:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "gapp.collector"]
+    volumes:
+      - data:/data
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      GAPP_DOMAIN: ${GAPP_DOMAIN:-gapp.az}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+volumes:
+  data:
+  caddy_data:
+  caddy_config:
