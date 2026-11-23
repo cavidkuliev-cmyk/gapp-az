@@ -216,3 +216,16 @@ def test_body_stats_prints_sizes(conn, capsys):
     body_stats.main()
     out = capsys.readouterr().out
     assert "Место в базе по дням" in out and "Файл базы:" in out and "Сайт" in out
+
+
+RELATED_PAGE = f"""<html><body><div class="wrap"><div class="content"><h1>Заголовок</h1>
+<img src="/img/photo1.jpg"><p>{PARA}</p><p>{PARA}</p><img src="/img/photo2.jpg"></div>
+<div class="related-news"><div><img src="/img/other1.jpg"></div></div>
+<ul><li><a href="/news/77"><img src="/img/card1.jpg"></a></li></ul>
+<a href="/img/big.jpg"><img src="/img/photo3.jpg"></a></div></body></html>"""
+
+
+def test_related_cards_are_not_article_media():
+    _, media = scrape.article_content(RELATED_PAGE, "https://s.az/news/1")
+    assert [m["url"] for m in media] == [
+        "https://s.az/img/photo1.jpg", "https://s.az/img/photo2.jpg", "https://s.az/img/photo3.jpg"]
