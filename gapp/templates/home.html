@@ -22,7 +22,7 @@
 </section>
 <aside class="side" aria-label="{{ L.sources }}">
 <h2 style="margin:0 0 8px;font-size:15px;text-transform:uppercase">{{ L.sources }}</h2>
-<ul>{% for src in sources %}<li><a href="{{ src.site }}" rel="noopener">{{ src.name }}</a></li>{% endfor %}</ul>
+<ul>{% for src in sources %}<li><a href="{{ src.path }}">{{ src.name }}</a></li>{% endfor %}</ul>
 </aside>
 </main>
 {% endblock %}

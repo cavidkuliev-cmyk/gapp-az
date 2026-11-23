@@ -87,7 +87,7 @@ def test_pages(conn):
     assert client.get("/poisk", params={"q": "100%"}).status_code == 200
 
     sitemap = client.get("/sitemap.xml").text
-    assert "/novost/tsentrobank" in sitemap and f"-{single['id']}</loc>" not in sitemap
+    assert "/novost/tsentrobank" in sitemap and f"-{single['id']}</loc>" not in sitemap.replace("/istochnik/istochnik-2<", "")
     assert client.get("/news-sitemap.xml").status_code == 200
     assert client.get("/rss.xml").status_code == 200
     assert "Sitemap:" in client.get("/robots.txt").text
