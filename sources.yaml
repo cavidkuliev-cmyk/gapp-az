@@ -7,7 +7,7 @@ sources:
     site: https://news.day.az
     feeds: [https://news.day.az/rss/all.rss]
   - name: Trend
-    enabled: false  # лента отдаёт новости на английском, русской ленты пока не нашли, проверено 23.11.2026
+    enabled: false  # ленты и карты на www.trend.az только на английском, адрес русской версии не найден, проверено 23.11.2026
     site: https://www.trend.az
     feeds: [https://www.trend.az/feeds/index.rss]
   - name: Report
@@ -17,13 +17,14 @@ sources:
     site: https://ru.apa.az
     feeds: [https://ru.apa.az/rss]
   - name: АЗЕРТАДЖ
-    enabled: false  # сайт отвечает 403 на запрос ленты, проверено 23.11.2026
+    enabled: false  # robots.txt запрещает бота, нужна договорённость с изданием, проверено 23.11.2026
     site: https://azertag.az/ru
     feeds: [https://azertag.az/ru/rss]
   - name: 1news.az
-    enabled: false  # адрес ленты не существует (404), проверено 23.11.2026
     site: https://1news.az
-    feeds: [https://1news.az/rss.xml]
+    feeds:
+      - url: https://1news.az/sitemap.xml  # RSS нет, берём карту сайта
+        type: sitemap
   - name: Haqqin.az
     site: https://haqqin.az
     feeds: [https://haqqin.az/rss]
@@ -34,9 +35,8 @@ sources:
     site: https://media.az
     feeds: [https://media.az/rss]
   - name: Oxu.az
-    enabled: false  # сайт отвечает 403 на запрос ленты, проверено 23.11.2026
     site: https://ru.oxu.az
-    feeds: [https://ru.oxu.az/rss]
+    feeds: [https://ru.oxu.az/feed]
   - name: Vesti.az
     site: https://vesti.az
     feeds: [https://vesti.az/rss]
@@ -44,7 +44,7 @@ sources:
     site: https://zerkalo.az
     feeds: [https://zerkalo.az/feed/]
   - name: Caliber.az
-    enabled: false  # сайт отвечает 403 на запрос ленты, проверено 23.11.2026
+    enabled: false  # страницы отвечают 403, открытая лента rss.xml не на русском, проверено 23.11.2026
     site: https://caliber.az
     feeds: [https://caliber.az/rss]
   - name: Интерфакс-Азербайджан
