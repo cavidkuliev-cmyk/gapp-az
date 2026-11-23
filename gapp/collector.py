@@ -1,5 +1,6 @@
 """Сборщик: опрашивает RSS-ленты, отбрасывает дубликаты, склеивает сюжеты."""
 import calendar
+import json
 import logging
 import re
 import sqlite3
@@ -129,16 +130,17 @@ def entry_to_item(entry, now: datetime, lang: str = "ru") -> dict | None:
         return None
     categories = [t.get("term", "") for t in entry.get("tags") or []]
     content = entry.get("content") or []
-    body = max(
-        (scrape.feed_body(raw) for raw in (
-            content[0].get("value") if content else "",
-            entry.get("turbo_content"),
-            entry.get("yandex_full-text"),
-        )),
-        key=len,
-    )
+    raws = (content[0].get("value") if content else "", entry.get("turbo_content"),
+            entry.get("yandex_full-text"))
+    raw = max(raws, key=lambda value: len(scrape.feed_body(value)))
+    body = scrape.feed_body(raw)
+    image = _entry_image(entry)
+    media = scrape.feed_media(raw, url) if body else []
+    if body and image and all(m["url"] != image for m in media):
+        media.insert(0, {"type": "image", "url": image})
     return {
         "body": body,
+        "media": media,
         "title": title,
         "url": url,
         "summary": summary,
@@ -208,7 +210,8 @@ def ingest(conn: sqlite3.Connection, source_id: int, item: dict, now: datetime |
 
     conn.execute(
         "INSERT INTO articles(source_id, story_id, url, title, title_hash, tokens, summary, image, "
-        "rubric, published_at, fetched_at, body, body_status) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "rubric, published_at, fetched_at, body, body_status, media) "
+        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             source_id,
             story_id,
@@ -223,6 +226,7 @@ def ingest(conn: sqlite3.Connection, source_id: int, item: dict, now: datetime |
             iso(now),
             item.get("body", ""),
             item.get("body_status") or ("feed" if item.get("body") else ""),
+            json.dumps(item.get("media") or [], ensure_ascii=False),
         ),
     )
     if result == "joined":
@@ -285,7 +289,7 @@ def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
         if cand["lang"] and not cand["lang"].startswith(feed["lang"]):
             continue
         meta = {"title": cand["title"], "summary": "", "image": cand["image"], "date": cand["date"]}
-        body, body_status = "", ""
+        body, body_status, media = "", "", []
         if not (cand["title"] and cand["date"]):
             # В карте нет заголовка: читаем страницу статьи, но не больше лимита за обход.
             if fetched >= config.PAGE_FETCH_LIMIT:
@@ -305,7 +309,7 @@ def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
                 continue
             page = scrape.article_meta(resp.text)
             if config.FETCH_BODIES:  # страница уже скачана: второй раз за текстом не ходим
-                body = scrape.article_body(resp.text)
+                body, media = scrape.article_content(resp.text, url)
                 body_status = "page" if body else "failed"
             if feed["kind"] == "html" and not (page["date"] or page["type"] == "article"):
                 yield None  # это не статья, а раздел или служебная страница
@@ -328,7 +332,7 @@ def scrape_items(conn, client, robots, feed, body: bytes, now: datetime):
             "title": meta["title"], "url": url, "summary": meta["summary"],
             "image": meta["image"] if meta["image"].startswith(("http://", "https://")) else "",
             "rubric": detect_rubric([], url), "published_at": published,
-            "body": body, "body_status": body_status,
+            "body": body, "body_status": body_status, "media": media,
         }
 
 
@@ -363,20 +367,23 @@ def fill_bodies(conn, client, robots, now: datetime) -> dict:
             continue
         per_host[host] = per_host.get(host, 0) + 1
         total += 1
-        body, status = "", "failed"
+        body, media, status = "", [], "failed"
         try:
             resp = client.get(row["url"])
             if resp.status_code in (401, 403):
                 status = "blocked"
                 blocked.add(host)
             elif resp.status_code == 200 and len(resp.content) <= MAX_FEED_BYTES:
-                body = scrape.article_body(resp.text)
+                body, media = scrape.article_content(resp.text, row["url"])
                 status = "page" if body else "failed"
         except httpx.HTTPError:
             pass
         finally:
             time.sleep(1)
-        conn.execute("UPDATE articles SET body = ?, body_status = ? WHERE id = ?", (body, status, row["id"]))
+        conn.execute(
+            "UPDATE articles SET body = ?, body_status = ?, media = ? WHERE id = ?",
+            (body, status, json.dumps(media, ensure_ascii=False), row["id"]),
+        )
         stats["body_saved" if body else "body_failed"] += 1
     conn.commit()
     return stats
@@ -439,7 +446,9 @@ def collect_once(conn: sqlite3.Connection, client: httpx.Client | None = None) -
                 stats["failed_feeds"] += 1
                 log.warning("лента %s: %s", feed["url"], status)
             if body and feed["kind"] == "rss":
-                parsed = feedparser.parse(body)
+                # Без чистки разметки: иначе feedparser вырезает из текста встроенные видео.
+                # Всё, что идёт на сайт, проходит через clean_text и экранируется шаблонами.
+                parsed = feedparser.parse(body, sanitize_html=False)
                 for entry in parsed.entries:
                     item = entry_to_item(entry, now, feed["lang"])
                     if item is None:

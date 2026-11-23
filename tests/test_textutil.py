@@ -11,7 +11,7 @@ def test_canonical_url_strips_tracking_and_amp():
 
 
 def test_clean_text_removes_markup():
-    assert clean_text("<p>Привет,&nbsp;<b>мир</b></p><script>x</script>") == "Привет, мир x"
+    assert clean_text("<p>Привет,&nbsp;<b>мир</b></p><script>x</script>") == "Привет, мир"  # содержимое script отбрасывается
 
 
 def test_summary_is_limited():
@@ -43,3 +43,9 @@ def test_rubric_and_slug():
     assert detect_rubric([], "https://x.az/economy/123") == "ekonomika"
     assert detect_rubric([], "https://x.az/123") == "raznoe"
     assert slugify("В Баку открыли дорогу!") == "v-baku-otkryli-dorogu"
+
+
+def test_clean_text_drops_script_and_style_content():
+    from gapp.textutil import clean_text
+
+    assert clean_text("До <script>alert(1)</script><style>p{color:red}</style> <b>после</b>") == "До после"

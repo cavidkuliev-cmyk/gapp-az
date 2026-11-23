@@ -86,6 +86,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("articles", "body", "TEXT NOT NULL DEFAULT ''"),
         # '' ещё не пробовали, feed из ленты, page со страницы, blocked сайт не пускает, failed не вышло
         ("articles", "body_status", "TEXT NOT NULL DEFAULT ''"),
+        # Фото и видео статьи: JSON-список {"type": "image"|"video", "url": ...}. Только адреса.
+        ("articles", "media", "TEXT NOT NULL DEFAULT '[]'"),
     ):
         have = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if name not in have:

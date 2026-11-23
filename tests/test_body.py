@@ -132,3 +132,53 @@ def test_full_text_is_not_shown_on_the_site(conn):
     site = TestClient(app)
     html = site.get(f"/novost/{story['slug']}-{story['id']}").text + site.get("/").text + site.get("/rss.xml").text
     assert "Короткий анонс" in html and "Секретный хвост" not in html
+
+
+MEDIA_PAGE = f"""<html><head><meta property="og:image" content="https://s.az/img/main.jpg">
+<script type="application/ld+json">{{"@type": "NewsArticle", "headline": "h",
+"video": {{"@type": "VideoObject", "embedUrl": "https://www.youtube.com/embed/abc123"}}}}</script></head><body>
+<header><img src="/img/logo.png"><img src="/img/menu-photo.jpg"></header>
+<main><article><h1>Заголовок</h1>
+<figure><img src="/img/main.jpg" alt=""><figcaption>Подпись</figcaption></figure>
+<div class="text"><p>{PARA}</p>
+<div class="gallery"><img data-src="/img/second.jpg" src="data:image/gif;base64,R0lGOD"><img src="/img/icon-share.png"></div>
+<p>{PARA}</p><iframe src="https://www.youtube.com/embed/abc123"></iframe>
+<iframe src="https://ads.example.com/frame"></iframe>
+<video poster="/img/poster.jpg"><source src="/video/clip.mp4" type="video/mp4"></video><p>{PARA}</p></div>
+<aside><img src="/img/related.jpg"></aside></article></main>
+<footer><img src="/img/footer-photo.jpg"></footer></body></html>"""
+
+
+def test_article_media_links():
+    body, media = scrape.article_content(MEDIA_PAGE, "https://s.az/news/1")
+    assert body.count("\n") == 2
+    assert media == [
+        {"type": "image", "url": "https://s.az/img/main.jpg"},
+        {"type": "video", "url": "https://www.youtube.com/embed/abc123"},
+        {"type": "image", "url": "https://s.az/img/second.jpg"},
+        {"type": "image", "url": "https://s.az/img/poster.jpg"},
+        {"type": "video", "url": "https://s.az/video/clip.mp4"},
+    ]
+
+
+def test_media_saved_from_page_and_feed(conn):
+    import json
+
+    full = (f"<content:encoded><![CDATA[<p>{PARA}</p><img src='https://s.az/img/in-feed.jpg'>"
+            f"<p>{PARA}{PARA}</p><iframe src='https://www.youtube.com/embed/zzz'></iframe>]]></content:encoded>"
+            "<enclosure url='https://s.az/img/cover.jpg' length='0' type='image/jpeg'/>")
+    routes = {
+        "https://s.az/rss": rss(item(1, "В Баку открыли новую станцию метро", full)
+                                + item(2, "Центробанк объявил курс маната на завтра")),
+        "https://s.az/news/2": MEDIA_PAGE,
+    }
+    hits = []
+    collector.collect_once(conn, client_for(routes, hits))
+    rows = {r["url"]: r for r in conn.execute("SELECT url, body_status, media FROM articles")}
+    feed_media = json.loads(rows["https://s.az/news/1"]["media"])
+    assert rows["https://s.az/news/1"]["body_status"] == "feed"
+    assert [m["url"] for m in feed_media] == [
+        "https://s.az/img/cover.jpg", "https://s.az/img/in-feed.jpg", "https://www.youtube.com/embed/zzz"]
+    page_media = json.loads(rows["https://s.az/news/2"]["media"])
+    assert rows["https://s.az/news/2"]["body_status"] == "page" and len(page_media) == 5
+    assert not any(h.endswith((".jpg", ".mp4")) for h in hits)  # сами файлы не скачиваются
