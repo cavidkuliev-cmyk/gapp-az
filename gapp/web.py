@@ -1,7 +1,9 @@
 """Сайт: серверный HTML без клиентского JavaScript."""
+import json
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -60,6 +62,44 @@ templates.env.filters["full_time"] = full_time
 templates.env.filters["baku_iso"] = baku_iso
 templates.env.filters["sources_label"] = sources_label
 templates.env.globals.update(site_url=config.SITE_URL, story_path=story_path, i18n=config.I18N)
+
+
+# Видеоплатформы, чьи плееры встраиваются на страницу. Остальные видео показываются ссылкой.
+_EMBED_PREFIXES = (
+    "https://www.youtube.com/embed/", "https://www.youtube-nocookie.com/embed/",
+    "https://player.vimeo.com/video/", "https://rutube.ru/play/embed/", "https://rutube.ru/video/embed/",
+    "https://www.dailymotion.com/embed/video/", "https://ok.ru/videoembed/",
+    "https://vk.com/video_ext.php", "https://vkvideo.ru/video_ext.php",
+    "https://www.facebook.com/plugins/video.php",
+)
+
+
+def media_item(item: dict) -> dict:
+    """Как показать вложение: фото, встроенный плеер, файл видео или просто ссылка."""
+    url = item.get("url", "")
+    if item.get("type") == "image":
+        return {"kind": "image", "url": url}
+    if url.startswith(_EMBED_PREFIXES):
+        return {"kind": "embed", "url": url}
+    if urlsplit(url).path.lower().endswith((".mp4", ".webm")):
+        return {"kind": "file", "url": url}
+    return {"kind": "link", "url": url}
+
+
+def full_blocks(body: str, media: list[dict]) -> list[dict]:
+    """Абзацы статьи, между которыми расставлены её фото и видео."""
+    paragraphs = [p for p in body.split("\n") if p.strip()]
+    items = [media_item(m) for m in media]
+    images = [m for m in items if m["kind"] == "image"]
+    others = [m for m in items if m["kind"] != "image"]
+    blocks = [images.pop(0)] if images else []
+    extra = images + others
+    step = max(2, len(paragraphs) // (len(extra) + 1)) if extra else 0
+    for n, text in enumerate(paragraphs, 1):
+        blocks.append({"kind": "p", "text": text})
+        if extra and step and n % step == 0:
+            blocks.append(extra.pop(0))
+    return blocks + extra
 
 
 def render(request: Request, name: str, lang: str = "ru", **ctx) -> HTMLResponse:
@@ -139,7 +179,7 @@ def story_page(request: Request, slug_id: str):
         if request.url.path != story_path(item):
             return RedirectResponse(story_path(item), status_code=301)
         articles = conn.execute(
-            "SELECT a.*, COALESCE(NULLIF(s.title, ''), s.name) AS source_name "
+            "SELECT a.*, COALESCE(NULLIF(s.title, ''), s.name) AS source_name, s.show_text "
             "FROM articles a JOIN sources s ON s.id = a.source_id "
             "WHERE a.story_id = ? ORDER BY a.published_at",
             (item["id"],),
@@ -149,8 +189,14 @@ def story_page(request: Request, slug_id: str):
             (item["lang"], item["rubric"], item["id"]),
         ).fetchall()
     indexable = item["source_count"] >= config.INDEX_MIN_SOURCES
+    # Полный текст показываем от первого источника, у которого он есть и разрешён.
+    full = None
+    if config.SHOW_FULL_TEXT:
+        row = next((a for a in articles if a["body"] and a["show_text"]), None)
+        if row:
+            full = {"row": row, "blocks": full_blocks(row["body"], json.loads(row["media"] or "[]"))}
     return render(
-        request, "story.html", item["lang"], story=item, articles=articles, related=related,
+        request, "story.html", item["lang"], story=item, articles=articles, related=related, full=full,
         indexable=indexable, active_rubric=item["rubric"],
         title=f"{item['title']} | Gapp.az",
         description=item["summary"] or item["title"],

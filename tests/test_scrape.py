@@ -94,7 +94,8 @@ def test_guess_pattern_and_links():
     assert pattern and len(scrape.links_matching(LISTING, "https://h.az/ru/", pattern)) == 2
 
 
-def test_news_sitemap_collected_without_page_fetches(conn):
+def test_news_sitemap_collected_without_page_fetches(conn, monkeypatch):
+    monkeypatch.setattr(config, "FETCH_BODIES", False)  # полный текст проверяется отдельно
     add_feed(conn, "https://n.az/news-sitemap.xml", "sitemap")
     hits = []
     client = client_for({"https://n.az/news-sitemap.xml": NEWS_SITEMAP}, hits)

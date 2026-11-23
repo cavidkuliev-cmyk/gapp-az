@@ -9,9 +9,22 @@
 <nav class="muted" aria-label="{{ L.crumbs }}"><a href="{{ L.home }}">{{ L.main }}</a> / <a href="{{ L.rubric }}{{ story.rubric }}">{{ L.rubric_names[story.rubric] }}</a></nav>
 <h1>{{ story.title }}</h1>
 <p class="muted" style="margin:0"><time datetime="{{ story.first_at | baku_iso }}">{{ story.first_at | full_time }}</time> · {{ story.source_count | sources_label(lang) }}</p>
+{% if full %}
+<section class="full">
+{% for b in full.blocks %}
+{% if b.kind == "p" %}<p>{{ b.text }}</p>
+{% elif b.kind == "image" %}<img src="{{ b.url }}" alt="" loading="lazy" referrerpolicy="no-referrer">
+{% elif b.kind == "embed" %}<div class="video"><iframe src="{{ b.url }}" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-presentation" allowfullscreen title="{{ story.title }}"></iframe></div>
+{% elif b.kind == "file" %}<video src="{{ b.url }}" controls preload="none" playsinline></video>
+{% else %}<p class="muted"><a href="{{ b.url }}" rel="noopener noreferrer" style="color:#1a5fd0">{{ b.url }}</a></p>{% endif %}
+{% endfor %}
+<p class="srcbox muted">{{ L.source_word }}: <b>{{ full.row.source_name }}</b> · {{ full.row.published_at | full_time }} · <a style="color:#1a5fd0" href="{{ full.row.url }}" rel="noopener">{{ L.original }}</a></p>
+</section>
+{% else %}
 {% if story.image %}<img src="{{ story.image }}" alt="" width="720" height="405" loading="lazy" referrerpolicy="no-referrer">
 <p class="muted" style="margin:0">{{ L.photo }}: {{ story.main_source }}</p>{% endif %}
 {% if story.summary %}<p>{{ story.summary }}</p>{% endif %}
+{% endif %}
 <h2 style="font-size:17px;margin:20px 0 8px">{{ L.who }}</h2>
 {% for a in articles %}
 <div class="src">

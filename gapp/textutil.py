@@ -8,6 +8,8 @@ TRACKING_PREFIXES = ("utm_",)
 TRACKING_PARAMS = {"fbclid", "gclid", "yclid", "ref", "from", "source", "amp"}
 
 _TAG_RE = re.compile(r"<[^>]+>")
+_INLINE_RE = re.compile(r"</?(b|i|u|em|strong|a|span|small|sup|sub|mark|font)\b[^>]*>", re.I)
+_CODE_RE = re.compile(r"<(script|style)\b.*?</\1\s*>", re.S | re.I)
 _SPACE_RE = re.compile(r"\s+")
 _WORD_RE = re.compile(r"[a-zа-яёəğıöşüç0-9]+")
 
@@ -54,6 +56,8 @@ def clean_text(value: str | None) -> str:
     """Убирает HTML-разметку и лишние пробелы. Результат безопасен как простой текст."""
     if not value:
         return ""
+    # Строчные теги (<b>, <a>, <span>) убираем без пробела, чтобы не отрывать от слов знаки препинания.
+    value = _INLINE_RE.sub("", _CODE_RE.sub(" ", value))
     text = html.unescape(_TAG_RE.sub(" ", value))
     return _SPACE_RE.sub(" ", text).strip()
 

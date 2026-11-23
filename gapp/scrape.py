@@ -243,6 +243,224 @@ def article_meta(html: str) -> dict:
     return result
 
 
+_SKIP_TAGS = {"script", "style", "noscript", "nav", "footer", "header", "aside", "form",
+              "figure", "figcaption", "button", "select", "iframe", "svg", "template"}
+_CHROME_TAGS = {"nav", "footer", "header", "aside", "form", "noscript", "template"}
+_BLOCK_TAGS = {"div", "article", "section", "main", "td", "body"}
+_VOID_TAGS = {"br", "img", "hr", "input", "meta", "link", "source", "wbr", "area", "base", "col",
+              "embed", "param", "track"}
+
+
+class _BodyParser(HTMLParser):
+    """Собирает абзацы <p> по блокам-родителям, чтобы найти блок с текстом статьи."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, int]] = []   # (тег, номер блока или 0)
+        self.blocks: dict[int, list[str]] = {}
+        self.parents: dict[int, int] = {}        # блок -> внешний блок
+        self.roots: set[int] = set()             # блоки <article> и <main>
+        self.media: list[tuple[int, str, str]] = []  # (блок, image|video, адрес)
+        self._chrome = 0                         # глубина внутри меню, подвала, боковой колонки
+        self._next = 0
+        self._skip = 0
+        self._para: list[str] | None = None
+
+    def _block(self) -> int:
+        for tag, block in reversed(self.stack):
+            if block:
+                return block
+        return 0
+
+    def _add_media(self, kind: str, url: str | None):
+        if url and not self._chrome:
+            self.media.append((self._block(), kind, url.strip()))
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "img":
+            srcset = (a.get("data-srcset") or a.get("srcset") or "").split(",")[-1].split()
+            self._add_media("image", a.get("data-src") or a.get("data-original") or a.get("src")
+                            or (srcset[0] if srcset else ""))
+        elif tag in ("video", "iframe", "embed"):
+            self._add_media("video", a.get("src") or a.get("data-src"))
+            if tag == "video":
+                self._add_media("image", a.get("poster"))
+        elif tag == "source" and any(t == "video" for t, _ in self.stack):
+            self._add_media("video", a.get("src"))
+        if tag in _VOID_TAGS:
+            if tag == "br" and self._para is not None:
+                self._para.append(" ")
+            return
+        block = 0
+        if tag in _BLOCK_TAGS:
+            self._next += 1
+            block = self._next
+            self.parents[block] = self._block()
+            if tag in ("article", "main"):
+                self.roots.add(block)
+        self.stack.append((tag, block))
+        if tag in _CHROME_TAGS:
+            self._chrome += 1
+        if tag in _SKIP_TAGS:
+            self._skip += 1
+        elif tag == "p" and not self._skip:
+            self._flush()
+            self._para = []
+
+    def _flush(self):
+        if self._para is not None:
+            text = clean_text("".join(self._para))
+            if len(text) >= 2:
+                self.blocks.setdefault(self._block(), []).append(text)
+        self._para = None
+
+    def handle_endtag(self, tag):
+        if tag in _VOID_TAGS:
+            return
+        if tag == "p":
+            self._flush()
+        for pos in range(len(self.stack) - 1, -1, -1):
+            if self.stack[pos][0] == tag:
+                for closed, _ in self.stack[pos:]:
+                    if closed in _SKIP_TAGS:
+                        self._skip -= 1
+                    if closed in _CHROME_TAGS:
+                        self._chrome -= 1
+                    if closed == "p":
+                        self._flush()
+                del self.stack[pos:]
+                break
+
+    def handle_data(self, data):
+        if self._para is not None and not self._skip:
+            self._para.append(data)
+
+
+_VIDEO_HOSTS = ("youtube.com", "youtube-nocookie.com", "youtu.be", "vimeo.com", "rutube.ru",
+                "ok.ru", "vk.com", "vkvideo.ru", "dailymotion.com", "facebook.com/plugins/video",
+                "t.me", "tiktok.com", "instagram.com")
+_VIDEO_EXT = (".mp4", ".webm", ".m3u8", ".mov")
+_JUNK_MEDIA = re.compile(r"logo|icon|avatar|sprite|banner|pixel|spacer|blank|emoji|/ads?/|counter", re.I)
+MEDIA_LIMIT = 40
+
+
+def _clean_media(found, base_url: str) -> list[dict]:
+    """Абсолютные адреса без повторов, значков и рекламы. Сами файлы не скачиваются."""
+    result, seen = [], set()
+    for kind, url in found:
+        if not url or url.startswith("data:"):
+            continue
+        url = urljoin(base_url, url)
+        path = urlsplit(url).path.lower()
+        if not url.startswith(("http://", "https://")) or url in seen:
+            continue
+        if kind == "video":
+            if not (any(host in url for host in _VIDEO_HOSTS) or path.endswith(_VIDEO_EXT)):
+                continue  # посторонние iframe: реклама, виджеты, счётчики
+        elif path.endswith((".svg", ".gif", ".ico")) or _JUNK_MEDIA.search(url):
+            continue
+        seen.add(url)
+        result.append({"type": kind, "url": url})
+        if len(result) >= MEDIA_LIMIT:
+            break
+    return result
+
+
+def _jsonld_media(node: dict):
+    for key, kind in (("image", "image"), ("video", "video")):
+        stack = [node.get(key)]
+        while stack:
+            value = stack.pop()
+            if isinstance(value, str):
+                yield kind, value
+            elif isinstance(value, list):
+                stack.extend(value)
+            elif isinstance(value, dict):
+                stack.extend([value.get("url"), value.get("contentUrl"), value.get("embedUrl")])
+
+
+def article_content(html: str, base_url: str = "", limit: int = 30000) -> tuple[str, list[dict]]:
+    """Полный текст статьи (абзацы через перевод строки) и её фото и видео.
+
+    Текст берётся из articleBody в JSON-LD, иначе из блока страницы с наибольшим
+    объёмом текста в абзацах <p>. Фото и видео собираются из того же блока статьи,
+    из JSON-LD и из Open Graph. Сохраняются только адреса, не сами файлы.
+    """
+    meta = _MetaParser()
+    try:
+        meta.feed(html)
+    except Exception:
+        pass
+    parser = _BodyParser()
+    try:
+        parser.feed(html)
+        parser._flush()
+    except Exception:
+        pass
+    text, found = "", []
+    for key in ("og:image", "og:video", "og:video:url", "og:video:secure_url"):
+        if meta.meta.get(key):
+            found.append(("video" if "video" in key else "image", meta.meta[key]))
+    for node in _jsonld_articles(meta.jsonld):
+        body = node.get("articleBody")
+        if not text and isinstance(body, str) and len(clean_text(body)) >= 200:
+            parts = [clean_text(part) for part in re.split(r"(?:\r?\n)+|</p>", body)]
+            text = "\n".join(part for part in parts if part)
+        found.extend(_jsonld_media(node))
+    if parser.blocks:
+        best = max(parser.blocks, key=lambda block: sum(len(p) for p in parser.blocks[block]))
+        if not text:
+            text = "\n".join(parser.blocks[best])
+        # Корень статьи: ближайший <article> или <main> над блоком с текстом, иначе внешний блок.
+        chain = [best]
+        while parser.parents.get(chain[-1]):
+            chain.append(parser.parents[chain[-1]])
+        root = next((b for b in chain if b in parser.roots), chain[1] if len(chain) > 1 else best)
+
+        def inside(block: int) -> bool:
+            while block:
+                if block == root:
+                    return True
+                block = parser.parents.get(block, 0)
+            return False
+
+        found.extend((kind, url) for block, kind, url in parser.media if inside(block))
+    if len(text) < 200:
+        return "", []
+    return text[:limit], _clean_media(found, base_url)
+
+
+def article_body(html: str, limit: int = 30000) -> str:
+    """Только текст статьи. См. article_content."""
+    return article_content(html, "", limit)[0]
+
+
+def feed_media(value: str | None, base_url: str = "") -> list[dict]:
+    """Фото и видео из поля ленты с полным текстом."""
+    if not value:
+        return []
+    found = []
+    for tag, attrs in re.findall(r"<(img|iframe|video|source|embed)\b([^>]*)>", value, flags=re.I):
+        match = re.search(r"""\b(?:data-src|src)\s*=\s*["']([^"']+)""", attrs, flags=re.I)
+        if match:
+            found.append(("image" if tag.lower() == "img" else "video", match.group(1)))
+    return _clean_media(found, base_url)
+
+
+def feed_body(value: str | None, limit: int = 30000) -> str:
+    """Полный текст из поля ленты (content:encoded, turbo:content, yandex:full-text)."""
+    if not value:
+        return ""
+    value = re.sub(r"<(header|figure|script|style)\b.*?</\1\s*>", " ", value, flags=re.S | re.I)
+    if "<p" in value.lower():
+        paras = [clean_text(part) for part in re.split(r"</p\s*>|<br\s*/?>\s*<br\s*/?>", value, flags=re.I)]
+    else:
+        paras = [clean_text(part) for part in re.split(r"(?:\r?\n)+", value)]
+    text = "\n".join(part for part in paras if part)
+    return text[:limit] if len(text) >= 200 else ""
+
+
 class Robots:
     """Правила robots.txt по сайтам. Запрещённые адреса сборщик не запрашивает."""
 
