@@ -4,6 +4,7 @@ services:
     restart: unless-stopped
     environment:
       GAPP_SITE_URL: https://${GAPP_DOMAIN:-gapp.az}
+      GAPP_ADMIN_PASSWORD: ${GAPP_ADMIN_PASSWORD:-}
     volumes:
       - data:/data
   collector:

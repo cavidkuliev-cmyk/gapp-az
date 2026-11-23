@@ -10,13 +10,14 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from . import config, db, scrape
+from . import admin, config, db, scrape
 from .textutil import slugify
 
 BAKU = timezone(timedelta(hours=4))
 PAGE_SIZE = 60
 
 app = FastAPI(title="Gapp.az", docs_url=None, redoc_url=None, openapi_url=None)
+app.include_router(admin.router)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
@@ -63,6 +64,7 @@ templates.env.filters["full_time"] = full_time
 templates.env.filters["baku_iso"] = baku_iso
 templates.env.filters["sources_label"] = sources_label
 templates.env.globals.update(site_url=config.SITE_URL, story_path=story_path, i18n=config.I18N)
+admin.templates.env.globals["story_path"] = story_path
 
 
 # Видеоплатформы, чьи плееры встраиваются на страницу. Остальные видео показываются ссылкой.
@@ -118,7 +120,7 @@ def iso_ago(**kwargs) -> str:
 
 
 def story_list(conn, lang: str, rubric: str | None, page: int):
-    where, params = "WHERE lang = ?", [lang]
+    where, params = "WHERE lang = ? AND hidden = 0", [lang]
     if rubric:
         where, params = where + " AND rubric = ?", [lang, rubric]
     rows = conn.execute(
@@ -160,7 +162,7 @@ def source_page(request: Request, lang: str, slug: str, page: int):
             "SELECT a.title AS title, a.published_at AS last_at, st.id AS id, st.slug AS slug, "
             "st.lang AS lang, st.source_count AS source_count, ? AS main_source "
             "FROM articles a JOIN stories st ON st.id = a.story_id "
-            "WHERE a.source_id = ? ORDER BY a.published_at DESC LIMIT ? OFFSET ?",
+            "WHERE a.source_id = ? AND st.hidden = 0 ORDER BY a.published_at DESC LIMIT ? OFFSET ?",
             (source["name"], source["id"], PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
         ).fetchall()
     return render(
@@ -177,7 +179,7 @@ def home_page(request: Request, lang: str, page: int):
     L = config.I18N[lang]
     with db.session() as conn:
         top = conn.execute(
-            "SELECT * FROM stories WHERE lang = ? AND last_at >= ? AND source_count >= 2 "
+            "SELECT * FROM stories WHERE lang = ? AND hidden = 0 AND last_at >= ? AND source_count >= 2 "
             "ORDER BY source_count DESC, last_at DESC LIMIT 8",
             (lang, iso_ago(hours=24)),
         ).fetchall()
@@ -215,7 +217,7 @@ def story_page(request: Request, slug_id: str):
         raise HTTPException(404)
     with db.session() as conn:
         item = conn.execute("SELECT * FROM stories WHERE id = ?", (int(raw_id),)).fetchone()
-        if item is None:
+        if item is None or item["hidden"]:
             raise HTTPException(404)
         if request.url.path != story_path(item):
             return RedirectResponse(story_path(item), status_code=301)
@@ -226,7 +228,7 @@ def story_page(request: Request, slug_id: str):
             (item["id"],),
         ).fetchall()
         related = conn.execute(
-            "SELECT * FROM stories WHERE lang = ? AND rubric = ? AND id != ? ORDER BY last_at DESC LIMIT 8",
+            "SELECT * FROM stories WHERE lang = ? AND rubric = ? AND id != ? AND hidden = 0 ORDER BY last_at DESC LIMIT 8",
             (item["lang"], item["rubric"], item["id"]),
         ).fetchall()
     indexable = item["source_count"] >= config.INDEX_MIN_SOURCES
@@ -254,7 +256,7 @@ def search_page(request: Request, lang: str, q: str):
         like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         with db.session() as conn:
             feed = conn.execute(
-                "SELECT * FROM stories WHERE lang = ? AND title LIKE ? ESCAPE '\\' "
+                "SELECT * FROM stories WHERE lang = ? AND hidden = 0 AND title LIKE ? ESCAPE '\\' "
                 "ORDER BY last_at DESC LIMIT 100",
                 (lang, like),
             ).fetchall()
@@ -347,7 +349,7 @@ def bot(request: Request):
 @app.get("/robots.txt", response_class=PlainTextResponse)
 def robots():
     return (
-        "User-agent: *\nDisallow: /poisk\nDisallow: /az/axtar\n\n"
+        "User-agent: *\nDisallow: /poisk\nDisallow: /az/axtar\nDisallow: /admin\n\n"
         f"Sitemap: {config.SITE_URL}/sitemap.xml\nSitemap: {config.SITE_URL}/news-sitemap.xml\n"
     )
 
@@ -360,7 +362,7 @@ def _xml(body: str) -> Response:
 def sitemap():
     with db.session() as conn:
         rows = conn.execute(
-            "SELECT id, slug, lang, last_at FROM stories WHERE source_count >= ? ORDER BY last_at DESC LIMIT 20000",
+            "SELECT id, slug, lang, last_at FROM stories WHERE source_count >= ? AND hidden = 0 ORDER BY last_at DESC LIMIT 20000",
             (config.INDEX_MIN_SOURCES,),
         ).fetchall()
     with db.session() as conn:
@@ -385,7 +387,7 @@ def sitemap():
 def news_sitemap():
     with db.session() as conn:
         rows = conn.execute(
-            "SELECT * FROM stories WHERE source_count >= ? AND first_at >= ? "
+            "SELECT * FROM stories WHERE source_count >= ? AND hidden = 0 AND first_at >= ? "
             "ORDER BY first_at DESC LIMIT 1000",
             (config.INDEX_MIN_SOURCES, iso_ago(hours=48)),
         ).fetchall()
@@ -407,7 +409,7 @@ def rss_feed(lang: str) -> Response:
     L = config.I18N[lang]
     with db.session() as conn:
         rows = conn.execute(
-            "SELECT * FROM stories WHERE lang = ? ORDER BY last_at DESC LIMIT 50", (lang,)
+            "SELECT * FROM stories WHERE lang = ? AND hidden = 0 ORDER BY last_at DESC LIMIT 50", (lang,)
         ).fetchall()
     items = [
         f"<item><title>{escape(r['title'])}</title><link>{config.SITE_URL}{escape(story_path(r))}</link>"

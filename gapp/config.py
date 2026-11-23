@@ -29,6 +29,9 @@ RUBRICS = [
 ]
 RUBRIC_NAMES = dict(RUBRICS)
 
+# Пароль админки (/admin). Пока не задан или короче 12 символов, админка выключена.
+ADMIN_PASSWORD = os.environ.get("GAPP_ADMIN_PASSWORD", "")
+
 # Показывать ли на страницах новостей полный текст, фото и видео. Общий выключатель;
 # отдельному источнику показ отключается в sources.yaml строкой `full_text: false`.
 SHOW_FULL_TEXT = os.environ.get("GAPP_SHOW_FULL_TEXT", "1") not in ("0", "false", "no", "")
