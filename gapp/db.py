@@ -76,13 +76,17 @@ def connect(path: Path | str | None = None) -> sqlite3.Connection:
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Добавляет столбцы, появившиеся после первого запуска."""
-    have = {row[1] for row in conn.execute("PRAGMA table_info(feeds)")}
-    for name, ddl in (
-        ("kind", "TEXT NOT NULL DEFAULT 'rss'"),   # rss, sitemap или html
-        ("pattern", "TEXT NOT NULL DEFAULT ''"),   # шаблон адреса статьи для html
+    for table, name, ddl in (
+        ("feeds", "kind", "TEXT NOT NULL DEFAULT 'rss'"),    # rss, sitemap или html
+        ("feeds", "pattern", "TEXT NOT NULL DEFAULT ''"),    # шаблон адреса статьи для html
+        ("sources", "lang", "TEXT NOT NULL DEFAULT 'ru'"),   # язык источника: ru или az
+        ("sources", "title", "TEXT NOT NULL DEFAULT ''"),    # имя для показа, если отличается от name
+        ("stories", "lang", "TEXT NOT NULL DEFAULT 'ru'"),
     ):
+        have = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if name not in have:
-            conn.execute(f"ALTER TABLE feeds ADD COLUMN {name} {ddl}")
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+    conn.execute("CREATE INDEX IF NOT EXISTS stories_lang ON stories(lang, last_at DESC)")
     conn.commit()
 
 

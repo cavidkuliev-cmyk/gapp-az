@@ -45,25 +45,25 @@ def plural(n: int, one: str, few: str, many: str) -> str:
     return f"{n} {many}"
 
 
-def sources_label(n: int) -> str:
+def sources_label(n: int, lang: str = "ru") -> str:
+    if lang == "az":
+        return f"{n} mənbə"
     return plural(n, "источник", "источника", "источников")
 
 
 def story_path(story) -> str:
-    return f"/novost/{story['slug']}-{story['id']}"
+    return f"{config.I18N[story['lang']]['story']}{story['slug']}-{story['id']}"
 
 
 templates.env.filters["short_time"] = short_time
 templates.env.filters["full_time"] = full_time
 templates.env.filters["baku_iso"] = baku_iso
 templates.env.filters["sources_label"] = sources_label
-templates.env.globals.update(
-    rubrics=config.RUBRICS, rubric_names=config.RUBRIC_NAMES, site_url=config.SITE_URL,
-    story_path=story_path,
-)
+templates.env.globals.update(site_url=config.SITE_URL, story_path=story_path, i18n=config.I18N)
 
 
-def render(request: Request, name: str, **ctx) -> HTMLResponse:
+def render(request: Request, name: str, lang: str = "ru", **ctx) -> HTMLResponse:
+    ctx.update(lang=lang, L=config.I18N[lang])
     response = templates.TemplateResponse(request, name, ctx)
     response.headers["Cache-Control"] = "public, max-age=60"
     return response
@@ -73,10 +73,10 @@ def iso_ago(**kwargs) -> str:
     return (datetime.now(timezone.utc) - timedelta(**kwargs)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def story_list(conn, rubric: str | None, page: int):
-    where, params = "", []
+def story_list(conn, lang: str, rubric: str | None, page: int):
+    where, params = "WHERE lang = ?", [lang]
     if rubric:
-        where, params = "WHERE rubric = ?", [rubric]
+        where, params = where + " AND rubric = ?", [lang, rubric]
     rows = conn.execute(
         f"SELECT * FROM stories {where} ORDER BY last_at DESC LIMIT ? OFFSET ?",
         (*params, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
@@ -84,42 +84,51 @@ def story_list(conn, rubric: str | None, page: int):
     return rows[:PAGE_SIZE], len(rows) > PAGE_SIZE
 
 
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request, page: int = Query(1, ge=1, le=500)):
+def paged(path: str, page: int) -> str:
+    return path if page == 1 else f"{path}?page={page}"
+
+
+def home_page(request: Request, lang: str, page: int):
+    L = config.I18N[lang]
     with db.session() as conn:
         top = conn.execute(
-            "SELECT * FROM stories WHERE last_at >= ? AND source_count >= 2 "
+            "SELECT * FROM stories WHERE lang = ? AND last_at >= ? AND source_count >= 2 "
             "ORDER BY source_count DESC, last_at DESC LIMIT 8",
-            (iso_ago(hours=24),),
+            (lang, iso_ago(hours=24)),
         ).fetchall()
-        feed, has_next = story_list(conn, None, page)
-        sources = conn.execute("SELECT name, site FROM sources WHERE active = 1 ORDER BY name").fetchall()
+        feed, has_next = story_list(conn, lang, None, page)
+        sources = conn.execute(
+            "SELECT COALESCE(NULLIF(title, ''), name) AS name, site FROM sources "
+            "WHERE active = 1 AND lang = ? ORDER BY name",
+            (lang,),
+        ).fetchall()
     return render(
-        request, "home.html", top=top, feed=feed, sources=sources, page=page, has_next=has_next,
-        title="Gapp.az: новости Азербайджана из всех изданий",
-        description="Свежие новости Азербайджана на русском языке из ведущих изданий в одной ленте.",
-        canonical="/" if page == 1 else f"/?page={page}",
+        request, "home.html", lang, top=top, feed=feed, sources=sources, page=page,
+        has_next=has_next, base_path=L["home"], title=L["home_title"], description=L["home_desc"],
+        canonical=paged(L["home"], page),
+        alternates={code: config.I18N[code]["home"] for code in config.LANGS} if page == 1 else None,
     )
 
 
-@app.get("/rubrika/{slug}", response_class=HTMLResponse)
-def rubric(request: Request, slug: str, page: int = Query(1, ge=1, le=500)):
-    if slug not in config.RUBRIC_NAMES:
+def rubric_page(request: Request, lang: str, slug: str, page: int):
+    L = config.I18N[lang]
+    if slug not in L["rubric_names"]:
         raise HTTPException(404)
-    name = config.RUBRIC_NAMES[slug]
+    name = L["rubric_names"][slug]
+    path = L["rubric"] + slug
     with db.session() as conn:
-        feed, has_next = story_list(conn, slug, page)
+        feed, has_next = story_list(conn, lang, slug, page)
     return render(
-        request, "list.html", feed=feed, page=page, has_next=has_next, heading=name,
-        base_path=f"/rubrika/{slug}", active_rubric=slug,
-        title=f"{name}: новости Азербайджана | Gapp.az",
-        description=f"Новости рубрики «{name}» из азербайджанских изданий на русском языке.",
-        canonical=f"/rubrika/{slug}" if page == 1 else f"/rubrika/{slug}?page={page}",
+        request, "list.html", lang, feed=feed, page=page, has_next=has_next, heading=name,
+        base_path=path, active_rubric=slug,
+        title=L["rubric_title"].format(name=name), description=L["rubric_desc"].format(name=name),
+        canonical=paged(path, page),
+        alternates={code: config.I18N[code]["rubric"] + slug for code in config.LANGS} if page == 1 else None,
     )
 
 
-@app.get("/novost/{slug_id}", response_class=HTMLResponse)
-def story(request: Request, slug_id: str):
+def story_page(request: Request, slug_id: str):
+    """Страница сюжета. Язык берётся из самого сюжета, чужой адрес перенаправляется."""
     slug, _, raw_id = slug_id.rpartition("-")
     if not raw_id.isdigit():
         raise HTTPException(404)
@@ -127,20 +136,21 @@ def story(request: Request, slug_id: str):
         item = conn.execute("SELECT * FROM stories WHERE id = ?", (int(raw_id),)).fetchone()
         if item is None:
             raise HTTPException(404)
-        if slug != item["slug"]:
+        if request.url.path != story_path(item):
             return RedirectResponse(story_path(item), status_code=301)
         articles = conn.execute(
-            "SELECT a.*, s.name AS source_name FROM articles a JOIN sources s ON s.id = a.source_id "
+            "SELECT a.*, COALESCE(NULLIF(s.title, ''), s.name) AS source_name "
+            "FROM articles a JOIN sources s ON s.id = a.source_id "
             "WHERE a.story_id = ? ORDER BY a.published_at",
             (item["id"],),
         ).fetchall()
         related = conn.execute(
-            "SELECT * FROM stories WHERE rubric = ? AND id != ? ORDER BY last_at DESC LIMIT 8",
-            (item["rubric"], item["id"]),
+            "SELECT * FROM stories WHERE lang = ? AND rubric = ? AND id != ? ORDER BY last_at DESC LIMIT 8",
+            (item["lang"], item["rubric"], item["id"]),
         ).fetchall()
     indexable = item["source_count"] >= config.INDEX_MIN_SOURCES
     return render(
-        request, "story.html", story=item, articles=articles, related=related,
+        request, "story.html", item["lang"], story=item, articles=articles, related=related,
         indexable=indexable, active_rubric=item["rubric"],
         title=f"{item['title']} | Gapp.az",
         description=item["summary"] or item["title"],
@@ -149,32 +159,83 @@ def story(request: Request, slug_id: str):
     )
 
 
-@app.get("/poisk", response_class=HTMLResponse)
-def search(request: Request, q: str = Query("", max_length=100)):
+def search_page(request: Request, lang: str, q: str):
+    L = config.I18N[lang]
     q = q.strip()
     feed = []
     if len(q) >= 3:
         like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         with db.session() as conn:
             feed = conn.execute(
-                "SELECT * FROM stories WHERE title LIKE ? ESCAPE '\\' ORDER BY last_at DESC LIMIT 100",
-                (like,),
+                "SELECT * FROM stories WHERE lang = ? AND title LIKE ? ESCAPE '\\' "
+                "ORDER BY last_at DESC LIMIT 100",
+                (lang, like),
             ).fetchall()
     return render(
-        request, "list.html", feed=feed, page=1, has_next=False, query=q,
-        heading=f"Поиск: {q}" if q else "Поиск", base_path="/poisk",
-        title="Поиск по новостям | Gapp.az", description="Поиск по новостям Gapp.az.",
-        canonical="/poisk", robots="noindex, follow",
+        request, "list.html", lang, feed=feed, page=1, has_next=False, query=q,
+        heading=f"{L['search_word']}: {q}" if q else L["search_word"], base_path=L["search"],
+        title=L["search_title"], description=L["search_desc"],
+        canonical=L["search"], robots="noindex, follow",
     )
+
+
+def about_page(request: Request, lang: str):
+    L = config.I18N[lang]
+    return render(
+        request, "about.html", lang, title=L["about_title"], description=L["about_desc"],
+        canonical=L["about"],
+        alternates={code: config.I18N[code]["about"] for code in config.LANGS},
+    )
+
+
+PAGE = Query(1, ge=1, le=500)
+Q = Query("", max_length=100)
+
+
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request, page: int = PAGE):
+    return home_page(request, "ru", page)
+
+
+@app.get("/az", response_class=HTMLResponse)
+def home_az(request: Request, page: int = PAGE):
+    return home_page(request, "az", page)
+
+
+@app.get("/rubrika/{slug}", response_class=HTMLResponse)
+def rubric(request: Request, slug: str, page: int = PAGE):
+    return rubric_page(request, "ru", slug, page)
+
+
+@app.get("/az/rubrika/{slug}", response_class=HTMLResponse)
+def rubric_az(request: Request, slug: str, page: int = PAGE):
+    return rubric_page(request, "az", slug, page)
+
+
+@app.get("/novost/{slug_id}", response_class=HTMLResponse)
+@app.get("/az/xeber/{slug_id}", response_class=HTMLResponse)
+def story(request: Request, slug_id: str):
+    return story_page(request, slug_id)
+
+
+@app.get("/poisk", response_class=HTMLResponse)
+def search(request: Request, q: str = Q):
+    return search_page(request, "ru", q)
+
+
+@app.get("/az/axtar", response_class=HTMLResponse)
+def search_az(request: Request, q: str = Q):
+    return search_page(request, "az", q)
 
 
 @app.get("/o-proekte", response_class=HTMLResponse)
 def about(request: Request):
-    return render(
-        request, "about.html", title="О проекте | Gapp.az",
-        description="Что такое Gapp.az, как собираются новости и как связаться с нами.",
-        canonical="/o-proekte",
-    )
+    return about_page(request, "ru")
+
+
+@app.get("/az/haqqinda", response_class=HTMLResponse)
+def about_az(request: Request):
+    return about_page(request, "az")
 
 
 @app.get("/bot", response_class=HTMLResponse)
@@ -189,7 +250,7 @@ def bot(request: Request):
 @app.get("/robots.txt", response_class=PlainTextResponse)
 def robots():
     return (
-        "User-agent: *\nDisallow: /poisk\n\n"
+        "User-agent: *\nDisallow: /poisk\nDisallow: /az/axtar\n\n"
         f"Sitemap: {config.SITE_URL}/sitemap.xml\nSitemap: {config.SITE_URL}/news-sitemap.xml\n"
     )
 
@@ -202,11 +263,14 @@ def _xml(body: str) -> Response:
 def sitemap():
     with db.session() as conn:
         rows = conn.execute(
-            "SELECT id, slug, last_at FROM stories WHERE source_count >= ? ORDER BY last_at DESC LIMIT 20000",
+            "SELECT id, slug, lang, last_at FROM stories WHERE source_count >= ? ORDER BY last_at DESC LIMIT 20000",
             (config.INDEX_MIN_SOURCES,),
         ).fetchall()
-    urls = [f"<url><loc>{config.SITE_URL}/</loc></url>"]
-    urls += [f"<url><loc>{config.SITE_URL}/rubrika/{slug}</loc></url>" for slug, _ in config.RUBRICS]
+    urls = []
+    for code in config.LANGS:
+        L = config.I18N[code]
+        urls.append(f"<url><loc>{config.SITE_URL}{L['home']}</loc></url>")
+        urls += [f"<url><loc>{config.SITE_URL}{L['rubric']}{slug}</loc></url>" for slug, _ in L["rubrics"]]
     urls += [
         f"<url><loc>{config.SITE_URL}{escape(story_path(r))}</loc><lastmod>{r['last_at']}</lastmod></url>"
         for r in rows
@@ -227,7 +291,7 @@ def news_sitemap():
         ).fetchall()
     urls = [
         f"<url><loc>{config.SITE_URL}{escape(story_path(r))}</loc><news:news><news:publication>"
-        "<news:name>Gapp.az</news:name><news:language>ru</news:language></news:publication>"
+        f"<news:name>Gapp.az</news:name><news:language>{r['lang']}</news:language></news:publication>"
         f"<news:publication_date>{r['first_at']}</news:publication_date>"
         f"<news:title>{escape(r['title'])}</news:title></news:news></url>"
         for r in rows
@@ -239,10 +303,12 @@ def news_sitemap():
     )
 
 
-@app.get("/rss.xml")
-def rss():
+def rss_feed(lang: str) -> Response:
+    L = config.I18N[lang]
     with db.session() as conn:
-        rows = conn.execute("SELECT * FROM stories ORDER BY last_at DESC LIMIT 50").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM stories WHERE lang = ? ORDER BY last_at DESC LIMIT 50", (lang,)
+        ).fetchall()
     items = [
         f"<item><title>{escape(r['title'])}</title><link>{config.SITE_URL}{escape(story_path(r))}</link>"
         f"<guid>{config.SITE_URL}{escape(story_path(r))}</guid>"
@@ -252,10 +318,20 @@ def rss():
     ]
     return _xml(
         '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>'
-        f"<title>Gapp.az</title><link>{config.SITE_URL}/</link>"
-        "<description>Новости Азербайджана из всех изданий</description><language>ru</language>"
+        f"<title>Gapp.az</title><link>{config.SITE_URL}{L['home']}</link>"
+        f"<description>{L['rss_desc']}</description><language>{lang}</language>"
         + "".join(items) + "</channel></rss>"
     )
+
+
+@app.get("/rss.xml")
+def rss():
+    return rss_feed("ru")
+
+
+@app.get("/az/rss.xml")
+def rss_az():
+    return rss_feed("az")
 
 
 @app.get("/healthz", response_class=PlainTextResponse)

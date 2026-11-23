@@ -9,15 +9,20 @@ TRACKING_PARAMS = {"fbclid", "gclid", "yclid", "ref", "from", "source", "amp"}
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _SPACE_RE = re.compile(r"\s+")
-_WORD_RE = re.compile(r"[a-zа-яё0-9]+", re.IGNORECASE)
+_WORD_RE = re.compile(r"[a-zа-яёəğıöşüç0-9]+")
 
 # Буквы азербайджанской латиницы и турецкого, которых нет в русском тексте.
 _AZ_LETTERS = set("əğıöşüçƏĞİÖŞÜÇ")
+LANGS = ("ru", "az")
 
 STOP_WORDS = {
     "этот", "этого", "также", "после", "будет", "будут", "были", "было", "может",
     "более", "менее", "новый", "новая", "новые", "года", "году", "видео", "фото",
     "обновлено", "заявил", "заявила", "сообщил", "сообщили", "стало", "стали",
+    # азербайджанские
+    "olub", "olan", "olar", "edib", "edir", "edən", "üçün", "ilə", "daha", "kimi",
+    "bildirib", "deyib", "açıqlayıb", "olunub", "olunur", "edilib", "edilir", "foto",
+    "video", "yeni", "yenilənib", "barədə", "sonra", "əvvəl", "qədər", "üzrə", "bütün",
 }
 
 _TRANSLIT = {
@@ -26,19 +31,22 @@ _TRANSLIT = {
     "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts",
     "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu",
     "я": "ya",
+    "ə": "e", "ğ": "g", "ı": "i", "ö": "o", "ş": "sh", "ü": "u", "ç": "ch",
 }
 
 # Ключевые слова в рубриках источника и в адресах -> наша рубрика.
 _RUBRIC_KEYWORDS = [
-    ("sport", ("спорт", "футбол", "sport", "football")),
-    ("proisshestviya", ("происшеств", "крими", "чп", "incident", "accident", "hadis")),
-    ("ekonomika", ("эконом", "бизнес", "финанс", "econom", "business", "finance", "энерг")),
-    ("politika", ("полит", "politic", "власть", "official", "официал")),
-    ("kultura", ("культур", "cultur", "шоу", "искусств", "show")),
-    ("nauka", ("наук", "технолог", "science", "tech", "hi-tech")),
+    ("sport", ("спорт", "футбол", "sport", "football", "idman", "futbol")),
+    ("proisshestviya", ("происшеств", "крими", "чп", "incident", "accident", "hadis", "kriminal")),
+    ("ekonomika", ("эконом", "бизнес", "финанс", "econom", "business", "finance", "энерг",
+                   "iqtisad", "biznes", "maliyy")),
+    ("politika", ("полит", "politic", "власть", "official", "официал", "siyas", "rəsmi", "resmi")),
+    ("kultura", ("культур", "cultur", "шоу", "искусств", "show", "mədəniyy", "medeniyy", "incəsən")),
+    ("nauka", ("наук", "технолог", "science", "tech", "hi-tech", "elm", "texnolog")),
     ("internet", ("интернет", "internet", "соцсет", "it")),
     ("avto", ("авто", "auto", "avto")),
-    ("obshestvo", ("общест", "society", "social", "социум", "здоров", "образован")),
+    ("obshestvo", ("общест", "society", "social", "социум", "здоров", "образован",
+                   "cəmiyy", "cemiyy", "sosial", "səhiyy", "sehiyy", "təhsil", "tehsil")),
 ]
 
 
@@ -78,10 +86,15 @@ def canonical_url(url: str) -> str:
     return urlunsplit(("https", host, path, urlencode(query), ""))
 
 
+def _norm(text: str) -> str:
+    """Нижний регистр с учётом азербайджанской İ, «ё» приравнивается к «е»."""
+    return text.replace("İ", "i").lower().replace("\u0307", "").replace("ё", "е")
+
+
 def title_tokens(title: str) -> set[str]:
     """Значимые слова заголовка в грубо усечённой форме (замена стеммингу)."""
     tokens = set()
-    for word in _WORD_RE.findall(title.lower().replace("ё", "е")):
+    for word in _WORD_RE.findall(_norm(title)):
         if word.isdigit():
             tokens.add(word)
         elif len(word) >= 4 and word not in STOP_WORDS:
@@ -91,7 +104,7 @@ def title_tokens(title: str) -> set[str]:
 
 def title_hash(title: str) -> str:
     """Хеш нормализованного заголовка: ловит ту же новость по другой ссылке."""
-    norm = " ".join(_WORD_RE.findall(title.lower().replace("ё", "е")))
+    norm = " ".join(_WORD_RE.findall(_norm(title)))
     return hashlib.sha1(norm.encode("utf-8")).hexdigest()
 
 
@@ -102,20 +115,34 @@ def similarity(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
-def is_russian(text: str) -> bool:
-    """True, если текст написан по-русски (кириллица, без азербайджанских букв)."""
+def text_lang(text: str) -> str:
+    """Язык текста: 'ru' (кириллица без азербайджанских букв), 'az' (латиница
+    с азербайджанскими буквами) или пустая строка, если это ни то ни другое."""
     letters = [ch for ch in text if ch.isalpha()]
     if len(letters) < 5:
-        return False
-    if any(ch in _AZ_LETTERS for ch in letters):
-        return False
+        return ""
+    az_letters = sum(1 for ch in letters if ch in _AZ_LETTERS)
     cyrillic = sum(1 for ch in letters if "а" <= ch.lower() <= "я" or ch.lower() == "ё")
-    return cyrillic / len(letters) >= 0.6
+    if not az_letters and cyrillic / len(letters) >= 0.6:
+        return "ru"
+    latin = az_letters + sum(1 for ch in letters if ch.isascii())
+    if az_letters and latin / len(letters) >= 0.6:
+        return "az"
+    return ""
+
+
+def is_russian(text: str) -> bool:
+    """True, если текст написан по-русски."""
+    return text_lang(text) == "ru"
+
+
+def is_lang(text: str, lang: str) -> bool:
+    return text_lang(text) == lang
 
 
 def detect_rubric(categories: list[str], url: str = "") -> str:
     """Подбирает рубрику по рубрикам источника и адресу статьи."""
-    haystacks = [c.lower() for c in categories if c]
+    haystacks = [_norm(c) for c in categories if c]
     path = urlsplit(url).path.lower()
     for slug, keywords in _RUBRIC_KEYWORDS:
         for hay in haystacks:
@@ -131,7 +158,7 @@ def detect_rubric(categories: list[str], url: str = "") -> str:
 def slugify(title: str, limit: int = 70) -> str:
     """Адрес из заголовка: транслитерация в латиницу, слова через дефис."""
     out = []
-    for ch in title.lower():
+    for ch in _norm(title):
         if ch in _TRANSLIT:
             out.append(_TRANSLIT[ch])
         elif ch.isascii() and ch.isalnum():

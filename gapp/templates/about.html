@@ -2,6 +2,15 @@
 {% block content %}
 <main class="cols">
 <article class="story">
+{% if lang == "az" %}
+<h1>Gapp.az layihəsi haqqında</h1>
+<p>Gapp.az Azərbaycan nəşrlərinin xəbərlərini avtomatik toplayır və bir lentdə göstərir. Biz yalnız başlığı, qısa anonsu və orijinala keçidi dərc edirik. Tam mətni nəşrin saytında oxuyun.</p>
+<p>Müxtəlif nəşrlərin eyni hadisə barədə xəbərləri bir mövzuda birləşdirilir ki, lent təkrarlanmasın.</p>
+<h2 id="bot">GappBot</h2>
+<p>Xəbərləri GappBot adlı bot toplayır. O, yalnız nəşrlərin açıq lentlərini oxuyur, bunu bir neçə dəqiqədə bir dəfədən çox etmir və saytların məhdudiyyətlərinə əməl edir.</p>
+<h2 id="pravo">Müəllif hüququ sahiblərinə</h2>
+<p>Əgər siz nəşri təmsil edirsinizsə və materiallarınızın Gapp.az-da göstərilməsini istəmirsinizsə və ya konkret xəbərin silinməsini istəyirsinizsə, bizə yazın. Mənbəni söndürəcək və ya materialı siləcəyik. Ünvan: <a href="mailto:info@gapp.az">info@gapp.az</a>.</p>
+{% else %}
 <h1>О проекте Gapp.az</h1>
 <p>Gapp.az автоматически собирает новости азербайджанских изданий на русском языке и показывает их в одной ленте. Мы публикуем только заголовок, короткий анонс и ссылку на оригинал. Полный текст читайте на сайте издания.</p>
 <p>Новости об одном событии из разных изданий объединяются в один сюжет, чтобы лента не повторялась.</p>
@@ -9,6 +18,7 @@
 <p>Новости собирает бот GappBot. Он читает только открытые RSS-ленты изданий, не чаще одного раза в несколько минут, и соблюдает ограничения сайтов.</p>
 <h2 id="pravo">Правообладателям</h2>
 <p>Если вы представляете издание и хотите, чтобы ваши материалы не показывались на Gapp.az, или хотите удалить конкретную новость, напишите нам. Мы отключим источник или уберём материал. Адрес: <a href="mailto:info@gapp.az">info@gapp.az</a>.</p>
+{% endif %}
 </article>
 </main>
 {% endblock %}

@@ -1,5 +1,7 @@
 """Подбор способа сбора для сайта: `python -m gapp.discover https://site.az/ru/`.
 
+Для азербайджанской версии сайта добавьте `--lang az`.
+
 Проверяет по порядку ленты RSS, карты сайта и саму страницу, печатает,
 что из этого отвечает, и готовый фрагмент для sources.yaml.
 """
@@ -11,7 +13,7 @@ import httpx
 
 from . import config, scrape
 from .collector import entry_to_item, now_utc
-from .textutil import is_russian
+from .textutil import LANGS, is_lang
 
 FEED_PATHS = ("rss", "rss.xml", "feed", "feed/", "rss/all.rss", "index.rss", "atom.xml")
 SITEMAP_PATHS = ("news-sitemap.xml", "sitemap-news.xml", "sitemap_news.xml", "sitemap.xml",
@@ -26,7 +28,7 @@ def _get(client, url):
         return None
 
 
-def discover(site: str, client: httpx.Client) -> dict | None:
+def discover(site: str, client: httpx.Client, lang: str = "ru") -> dict | None:
     if not site.endswith("/"):
         site += "/"
     parts = urlsplit(site)
@@ -51,7 +53,7 @@ def discover(site: str, client: httpx.Client) -> dict | None:
                 print(f"  {resp.status_code}  сайт отказывает боту  {url}")
             continue
         entries = feedparser.parse(resp.content).entries
-        good = sum(1 for e in entries if entry_to_item(e, now_utc()))
+        good = sum(1 for e in entries if entry_to_item(e, now_utc(), lang))
         if entries:
             print(f"  200  записей {len(entries)}, подходящих {good}  {url}")
         if good >= 3:
@@ -69,11 +71,11 @@ def discover(site: str, client: httpx.Client) -> dict | None:
         if kind == "invalid" or not items:
             continue
         titled = [i for i in items if i["title"]]
-        russian = sum(1 for i in titled if is_russian(i["title"]))
+        russian = sum(1 for i in titled if is_lang(i["title"], lang))
         dated = sum(1 for i in items if i["date"])
         label = "индекс карт" if kind == "index" else "карта"
         print(f"  200  {label}: адресов {len(items)}, с заголовком {len(titled)} "
-              f"(русских {russian}), с датой {dated}  {url}")
+              f"(на языке {lang}: {russian}), с датой {dated}  {url}")
         if russian >= 3:
             return {"url": url, "type": "sitemap"}  # карта для новостей: лучший вариант
         if best is None and dated >= 3:
@@ -92,14 +94,21 @@ def discover(site: str, client: httpx.Client) -> dict | None:
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
+    args = sys.argv[1:]
+    lang = "ru"
+    if "--lang" in args:
+        pos = args.index("--lang")
+        lang = args[pos + 1] if pos + 1 < len(args) else ""
+        del args[pos:pos + 2]
+    if not args or lang not in LANGS:
         print("Укажите адрес сайта, например: python -m gapp.discover https://1news.az/")
+        print("Для азербайджанской версии: python -m gapp.discover --lang az https://milli.az/")
         raise SystemExit(2)
     with httpx.Client(headers={"User-Agent": config.USER_AGENT}, timeout=20,
                       follow_redirects=True) as client:
-        for site in sys.argv[1:]:
+        for site in args:
             print(f"\n=== {site}")
-            found = discover(site, client)
+            found = discover(site, client, lang)
             if not found:
                 print("Итог: способ не найден.")
                 continue

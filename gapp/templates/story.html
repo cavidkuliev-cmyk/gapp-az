@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% block head %}<meta property="og:type" content="article">
 {% if story.image %}<meta property="og:image" content="{{ story.image }}">{% endif %}
-<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "NewsArticle", "headline": story.title, "datePublished": story.first_at | baku_iso, "dateModified": story.last_at | baku_iso, "inLanguage": "ru", "mainEntityOfPage": site_url ~ canonical, "publisher": {"@type": "Organization", "name": "Gapp.az", "url": site_url ~ "/"}, "isBasedOn": articles | map(attribute="url") | list} | tojson }}</script>
-<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Главная", "item": site_url ~ "/"}, {"@type": "ListItem", "position": 2, "name": rubric_names[story.rubric], "item": site_url ~ "/rubrika/" ~ story.rubric}]} | tojson }}</script>{% endblock %}
+<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "NewsArticle", "headline": story.title, "datePublished": story.first_at | baku_iso, "dateModified": story.last_at | baku_iso, "inLanguage": lang, "mainEntityOfPage": site_url ~ canonical, "publisher": {"@type": "Organization", "name": "Gapp.az", "url": site_url ~ "/"}, "isBasedOn": articles | map(attribute="url") | list} | tojson }}</script>
+<script type="application/ld+json">{{ {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": L.main, "item": site_url ~ L.home}, {"@type": "ListItem", "position": 2, "name": L.rubric_names[story.rubric], "item": site_url ~ L.rubric ~ story.rubric}]} | tojson }}</script>{% endblock %}
 {% block content %}
 <main class="cols">
 <article class="story">
-<nav class="muted" aria-label="Навигация"><a href="/">Главная</a> / <a href="/rubrika/{{ story.rubric }}">{{ rubric_names[story.rubric] }}</a></nav>
+<nav class="muted" aria-label="{{ L.crumbs }}"><a href="{{ L.home }}">{{ L.main }}</a> / <a href="{{ L.rubric }}{{ story.rubric }}">{{ L.rubric_names[story.rubric] }}</a></nav>
 <h1>{{ story.title }}</h1>
-<p class="muted" style="margin:0"><time datetime="{{ story.first_at | baku_iso }}">{{ story.first_at | full_time }}</time> · {{ story.source_count | sources_label }}</p>
+<p class="muted" style="margin:0"><time datetime="{{ story.first_at | baku_iso }}">{{ story.first_at | full_time }}</time> · {{ story.source_count | sources_label(lang) }}</p>
 {% if story.image %}<img src="{{ story.image }}" alt="" width="720" height="405" loading="lazy" referrerpolicy="no-referrer">
-<p class="muted" style="margin:0">Фото: {{ story.main_source }}</p>{% endif %}
+<p class="muted" style="margin:0">{{ L.photo }}: {{ story.main_source }}</p>{% endif %}
 {% if story.summary %}<p>{{ story.summary }}</p>{% endif %}
-<h2 style="font-size:17px;margin:20px 0 8px">Кто об этом пишет</h2>
+<h2 style="font-size:17px;margin:20px 0 8px">{{ L.who }}</h2>
 {% for a in articles %}
 <div class="src">
 <b>{{ a.source_name }}</b>
@@ -20,11 +20,11 @@
 <time class="muted" datetime="{{ a.published_at | baku_iso }}">{{ a.published_at | full_time }}</time>
 </div>
 {% endfor %}
-<p style="margin:16px 0 0"><a class="btn" style="display:inline-block" href="{{ articles[0].url }}" rel="noopener">Читать на сайте {{ articles[0].source_name }}</a></p>
+<p style="margin:16px 0 0"><a class="btn" style="display:inline-block" href="{{ articles[0].url }}" rel="noopener">{{ L.read_at.format(name=articles[0].source_name) }}</a></p>
 </article>
 {% if related %}
-<aside class="side" aria-label="Ещё по теме">
-<h2 style="margin:0 0 8px;font-size:15px;text-transform:uppercase">{{ rubric_names[story.rubric] }}: ещё новости</h2>
+<aside class="side" aria-label="{{ L.related_label }}">
+<h2 style="margin:0 0 8px;font-size:15px;text-transform:uppercase">{{ L.related.format(name=L.rubric_names[story.rubric]) }}</h2>
 <ul>{% for s in related %}<li><a href="{{ story_path(s) }}">{{ s.title }}</a></li>{% endfor %}</ul>
 </aside>
 {% endif %}
