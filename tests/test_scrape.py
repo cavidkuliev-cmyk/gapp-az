@@ -140,3 +140,26 @@ def test_page_fetch_limit_and_robots(conn, monkeypatch):
     monkeypatch.setattr(config, "PAGE_FETCH_LIMIT", 10)
     collector.collect_once(conn, client_for(routes, hits))
     assert not any("55502" in h for h in hits)  # запрещённый раздел не запрашиваем
+
+
+def test_sitemap_backlog_continues_when_server_supports_etag(conn, monkeypatch):
+    add_feed(conn, "https://h.az/ru/", "html", r"^/ru/[^/]+/\d+-")
+    monkeypatch.setattr(config, "PAGE_FETCH_LIMIT", 1)
+    pages = {
+        "https://h.az/ru/politika/55501-zasedanie-parlamenta": article_page("Первая новость дня"),
+        "https://h.az/ru/sport/55502-match": article_page("Вторая новость дня о спорте"),
+    }
+
+    def handler(request):
+        url = str(request.url)
+        if url == "https://h.az/ru/":
+            if request.headers.get("If-None-Match") == "v1":
+                return httpx.Response(304)
+            return httpx.Response(200, text=LISTING, headers={"ETag": "v1"})
+        if url in pages:
+            return httpx.Response(200, text=pages[url])
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    assert collector.collect_once(conn, client)["new"] == 1
+    assert collector.collect_once(conn, client)["new"] == 1  # остаток добран, 304 не помешал
