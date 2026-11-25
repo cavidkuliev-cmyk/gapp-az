@@ -1,5 +1,6 @@
 """Сайт: серверный HTML без клиентского JavaScript."""
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
@@ -33,6 +34,29 @@ def short_time(value: str) -> str:
     return dt.strftime("%d.%m")
 
 
+def views_label(count: int) -> str:
+    if count >= 1_000_000:
+        return f"{count / 1_000_000:.1f}".rstrip("0").rstrip(".").replace(".", ",") + " млн просмотров"
+    if count >= 1000:
+        return f"{count // 1000} тыс. просмотров"
+    return f"{count} просмотров"
+
+
+def duration_label(seconds: int) -> str:
+    if seconds <= 0:
+        return ""
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+def ago_label(value: str) -> str:
+    minutes = max(int((datetime.now(timezone.utc) - parse_iso(value)).total_seconds() // 60), 0)
+    if minutes < 60:
+        return f"{max(minutes, 1)} мин назад"
+    return f"{minutes // 60} ч назад"
+
+
 def full_time(value: str) -> str:
     return parse_iso(value).astimezone(BAKU).strftime("%d.%m.%Y, %H:%M")
 
@@ -60,6 +84,9 @@ def story_path(story) -> str:
 
 
 templates.env.filters["short_time"] = short_time
+templates.env.filters["views_label"] = views_label
+templates.env.filters["duration_label"] = duration_label
+templates.env.filters["ago_label"] = ago_label
 templates.env.filters["full_time"] = full_time
 templates.env.filters["baku_iso"] = baku_iso
 templates.env.filters["sources_label"] = sources_label
@@ -291,6 +318,41 @@ def home_az(request: Request, page: int = PAGE):
     return home_page(request, "az", page)
 
 
+VIDEO_LIMIT = 60
+VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+@app.get("/video", response_class=HTMLResponse)
+def video_page(request: Request):
+    """Популярные видео YouTube в Азербайджане за сутки. Один общий раздел, без деления по языкам."""
+    with db.session() as conn:
+        rows = conn.execute(
+            "SELECT * FROM videos WHERE hidden = 0 AND published_at >= ? ORDER BY views DESC LIMIT ?",
+            (iso_ago(hours=config.VIDEO_WINDOW_HOURS), VIDEO_LIMIT),
+        ).fetchall()
+    return render(
+        request, "video.html", "ru", videos=rows, hours=config.VIDEO_WINDOW_HOURS,
+        title="Популярные видео Азербайджана за 24 часа | Gapp.az",
+        description="Самые популярные ролики YouTube в Азербайджане за последние сутки: свежие видео по числу просмотров.",
+        canonical="/video",
+    )
+
+
+@app.get("/video/{video_id}", response_class=HTMLResponse)
+def video_item(request: Request, video_id: str):
+    if not VIDEO_ID.match(video_id):
+        raise HTTPException(404)
+    with db.session() as conn:
+        row = conn.execute("SELECT * FROM videos WHERE id = ? AND hidden = 0", (video_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404)
+    return render(
+        request, "video_item.html", "ru", video=row, title=f"{row['title']} | Gapp.az",
+        description=f"Видео «{row['title']}», канал {row['channel']}.", canonical=f"/video/{video_id}",
+        robots="noindex, follow",
+    )
+
+
 @app.get("/istochnik/{slug}", response_class=HTMLResponse)
 def source_ru(request: Request, slug: str, page: int = PAGE):
     return source_page(request, "ru", slug, page)
@@ -373,6 +435,7 @@ def sitemap():
         urls.append(f"<url><loc>{config.SITE_URL}{L['home']}</loc></url>")
         urls += [f"<url><loc>{config.SITE_URL}{L['rubric']}{slug}</loc></url>" for slug, _ in L["rubrics"]]
         urls += [f"<url><loc>{config.SITE_URL}{escape(s['path'])}</loc></url>" for s in sources_by_lang[code]]
+    urls.append(f"<url><loc>{config.SITE_URL}/video</loc></url>")
     urls += [
         f"<url><loc>{config.SITE_URL}{escape(story_path(r))}</loc><lastmod>{r['last_at']}</lastmod></url>"
         for r in rows

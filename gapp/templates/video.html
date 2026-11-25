@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="cols">
+<section class="feed" style="flex:1 1 100%" aria-label="Видео">
+<h1 class="tag gray">Популярные видео Азербайджана за {{ hours }} ч</h1>
+<p class="muted" style="margin:0 0 12px">Свежие ролики YouTube из списка популярных в Азербайджане, по числу просмотров. Обновляется раз в час.</p>
+<div class="vgrid">
+{% for v in videos %}
+<a class="vcard" href="/video/{{ v.id }}">
+<img src="https://i.ytimg.com/vi/{{ v.id }}/mqdefault.jpg" width="320" height="180" alt="" loading="lazy">
+{% if v.duration %}<span class="dur">{{ v.duration | duration_label }}</span>{% endif %}
+<span class="t">{{ v.title }}</span>
+<span class="muted">{{ v.channel }} · {{ v.views | views_label }} · {{ v.published_at | ago_label }}</span>
+</a>
+{% else %}
+<p class="muted">Пока нет данных. Список появится после первого обновления.</p>
+{% endfor %}
+</div>
+</section>
+</main>
+{% endblock %}
