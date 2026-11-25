@@ -27,6 +27,8 @@ def conn(tmp_path, monkeypatch):
 
 def api_client(pages, calls):
     def handler(request):
+        assert "TESTKEY" not in str(request.url)               # ключ не должен попасть в адрес (и в журнал)
+        assert request.headers["x-goog-api-key"] == "TESTKEY"
         calls.append(dict(request.url.params))
         category = request.url.params.get("videoCategoryId", "")
         if category == "20":
@@ -66,11 +68,19 @@ def test_collect_saves_videos_and_respects_interval(conn):
     assert videos.collect_videos(conn, api_client(pages, again), now + timedelta(minutes=61))["videos"] == 3
 
 
+def test_key_never_reaches_the_log(conn, caplog):
+    calls = []
+    with caplog.at_level("INFO"):  # на уровне INFO библиотека httpx пишет адрес каждого запроса
+        videos.collect_videos(conn, api_client({"": {"items": []}}, calls), datetime.now(timezone.utc))
+    assert calls and "HTTP Request" in caplog.text            # журнал httpx действительно перехвачен
+    assert "TESTKEY" not in caplog.text and "key=" not in caplog.text
+
+
 def test_bad_key_stops_without_leaking_it(conn, caplog):
     def handler(request):
         return httpx.Response(403, json={"error": {"errors": [{"reason": "quotaExceeded"}]}})
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    with caplog.at_level("WARNING"):
+    with caplog.at_level("INFO"):
         stats = videos.collect_videos(conn, client, datetime.now(timezone.utc))
     assert stats["video_errors"] == 1 and "TESTKEY" not in caplog.text
 
