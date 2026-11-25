@@ -262,9 +262,12 @@ def story_page(request: Request, slug_id: str):
     # Полный текст показываем от первого источника, у которого он есть и разрешён.
     full = None
     if config.SHOW_FULL_TEXT:
-        row = next((a for a in articles if a["body"] and a["show_text"]), None)
-        if row:
-            full = {"row": row, "blocks": full_blocks(row["body"], json.loads(row["media"] or "[]"))}
+        # Из источников сюжета берём статью с самым богатым набором фото (при равенстве самую раннюю).
+        candidates = [(a, full_blocks(a["body"], json.loads(a["media"] or "[]")))
+                      for a in articles if a["body"] and a["show_text"]]
+        if candidates:
+            row, blocks = max(candidates, key=lambda c: sum(b["kind"] != "p" for b in c[1]))
+            full = {"row": row, "blocks": blocks}
     return render(
         request, "story.html", item["lang"], story=item, articles=articles, related=related, full=full,
         indexable=indexable, active_rubric=item["rubric"],
