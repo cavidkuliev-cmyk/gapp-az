@@ -102,15 +102,16 @@ def collect_videos(conn: sqlite3.Connection, client: httpx.Client, now: datetime
         token = ""
         for _ in range(MAX_PAGES):
             params = {"part": "snippet,statistics,contentDetails", "chart": "mostPopular",
-                      "regionCode": config.VIDEO_REGION, "maxResults": 50, "key": config.YOUTUBE_API_KEY}
+                      "regionCode": config.VIDEO_REGION, "maxResults": 50}
             if category:
                 params["videoCategoryId"] = category
             if token:
                 params["pageToken"] = token
             try:
-                resp = client.get(API_URL, params=params)
+                # Ключ только в заголовке: адрес запроса попадает в журнал, а заголовки нет.
+                resp = client.get(API_URL, params=params, headers={"X-Goog-Api-Key": config.YOUTUBE_API_KEY})
             except httpx.HTTPError as exc:
-                # В тексте ошибки может быть адрес с ключом: пишем только тип.
+                # Пишем только тип ошибки, без текста запроса.
                 log.warning("YouTube API: %s", type(exc).__name__)
                 stats["video_errors"] += 1
                 break
