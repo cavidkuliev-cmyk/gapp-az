@@ -106,3 +106,18 @@ def test_hide_and_restore_story(env):
 def test_robots_blocks_admin(env):
     conn, client = env
     assert "Disallow: /admin" in client.get("/robots.txt").text
+
+
+def test_video_channel_switch(env):
+    conn, client = env
+    conn.execute("INSERT INTO video_channels(id, title, origin, added_at) "
+                 "VALUES('UCabc0000000000000000x', 'Тест ТВ', 'seed', '2026-11-25T00:00:00Z')")
+    conn.commit()
+    home = login(client)
+    assert "Тест ТВ" in home.text
+    csrf = token(home)
+    assert client.post("/admin/videochannel/UCabc0000000000000000x/off", data={}).status_code in (401, 403)
+    client.post("/admin/videochannel/UCabc0000000000000000x/off", data={"csrf": csrf})
+    assert conn.execute("SELECT enabled FROM video_channels").fetchone()[0] == 0
+    client.post("/admin/videochannel/UCabc0000000000000000x/on", data={"csrf": csrf})
+    assert conn.execute("SELECT enabled FROM video_channels").fetchone()[0] == 1

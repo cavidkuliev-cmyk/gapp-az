@@ -25,10 +25,13 @@ def conn(tmp_path, monkeypatch):
     c.close()
 
 
-def api_client(pages, calls):
+def api_client(pages, calls, routes=None):
     def handler(request):
         assert "TESTKEY" not in str(request.url)               # ключ не должен попасть в адрес (и в журнал)
         assert request.headers["x-goog-api-key"] == "TESTKEY"
+        if "chart" not in request.url.params:      # поиск канала, список загрузок, данные роликов по id
+            extra = (routes or {}).get(request.url.path.rsplit("/", 1)[-1], {"items": []})
+            return httpx.Response(200, json=extra(request) if callable(extra) else extra)
         calls.append(dict(request.url.params))
         category = request.url.params.get("videoCategoryId", "")
         if category == "20":
@@ -90,7 +93,7 @@ def test_video_pages(conn):
     videos.save_videos(conn, videos.parse_videos({"items": [
         api_item("aaaaaaaaaaa", 3, 9000, title="Свежий хит"),
         api_item("bbbbbbbbbbb", 30, 800000, title="Старый ролик"),
-        api_item("ccccccccccc", 2, 1500000, title="Главный ролик", channel="Канал Z")]}), now)
+        api_item("ccccccccccc", 2, 1500000, title="Главный ролик", channel="Канал Z")]}), now, popular=1)
     conn.commit()
     from gapp.web import app
     client = TestClient(app)
@@ -110,3 +113,68 @@ def test_video_pages(conn):
 def test_video_page_empty(conn):
     from gapp.web import app
     assert "Пока нет данных" in TestClient(app).get("/video").text
+
+
+def test_az_flag_and_channel_discovery(conn):
+    now = datetime.now(timezone.utc)
+    items = [api_item("aaaaaaaaaaa", 2, 900, title="Xəbər: Bakıda yeni yol açıldı", channel="Xəbər TV"),
+             api_item("bbbbbbbbbbb", 2, 900, title="Turning a drawing into real life", channel="MrBeast")]
+    items[0]["snippet"]["channelId"], items[1]["snippet"]["channelId"] = "UCaz000000000000000000", "UCen000000000000000000"
+    pages = {"": {"items": items}}
+    videos.collect_videos(conn, api_client(pages, []), now)
+    channels = conn.execute("SELECT id, origin FROM video_channels").fetchall()
+    assert [tuple(c) for c in channels] == [("UCaz000000000000000000", "auto")]
+    flags = dict(conn.execute("SELECT id, is_az FROM videos").fetchall())
+    assert flags == {"aaaaaaaaaaa": 1, "bbbbbbbbbbb": 0}
+
+
+def test_seed_channels_resolved_once_and_uploads_collected(conn, tmp_path):
+    now = datetime.now(timezone.utc)
+    seeds = tmp_path / "channels.yaml"
+    seeds.write_text("channels:\n  - ANS TV\n  - Нет Такого\n", encoding="utf-8")
+    searches = []
+
+    def search(request):
+        searches.append(request.url.params["q"])
+        return {"items": [
+            {"snippet": {"channelId": "UCfake0000000000000000", "channelTitle": "ANS TV fans"}},
+            {"snippet": {"channelId": "UCans00000000000000000", "channelTitle": "ANS TV"}}]} if "ANS" in searches[-1] \
+            else {"items": []}
+
+    client = api_client({}, [], routes={"search": search})
+    assert videos.resolve_seeds(conn, client, now, seeds) == 1
+    assert conn.execute("SELECT id, seed_name FROM video_channels").fetchall()[0][0] == "UCans00000000000000000"
+    videos.resolve_seeds(conn, client, now + timedelta(hours=1), seeds)
+    assert searches == ["ANS TV", "Нет Такого"]                       # повторно не ищем, ни найденный, ни пустой
+
+    fresh = (now - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    old = (now - timedelta(hours=40)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    requested = []
+
+    def uploads(request):
+        assert request.url.params["playlistId"] == "UUans00000000000000000"
+        return {"items": [{"contentDetails": {"videoId": "ccccccccccc", "videoPublishedAt": fresh}},
+                          {"contentDetails": {"videoId": "ddddddddddd", "videoPublishedAt": old}}]}
+
+    def by_id(request):
+        requested.append(request.url.params["id"])
+        return {"items": [api_item("ccccccccccc", 3, 4000, title="Xəbər buraxılışı", channel="ANS TV")]}
+
+    client = api_client({}, [], routes={"playlistItems": uploads, "videos": by_id})
+    assert videos.collect_channels(conn, client, now)["channel_videos"] == 1
+    assert requested == ["ccccccccccc"]                                # старое видео не запрашивается
+    assert conn.execute("SELECT from_channel, popular FROM videos").fetchone()[:] == (1, 0)
+
+
+def test_video_page_has_two_blocks(conn):
+    now = datetime.now(timezone.utc)
+    videos.save_videos(conn, videos.parse_videos({"items": [api_item("aaaaaaaaaaa", 2, 900, title="Мировой хит")]}),
+                       now, popular=1)
+    videos.save_videos(conn, videos.parse_videos({"items": [
+        api_item("ccccccccccc", 2, 700, title="Xəbər buraxılışı", channel="ANS TV")]}), now, from_channel=1)
+    conn.commit()
+    from gapp.web import app
+    page = TestClient(app).get("/video").text
+    assert "Популярное в Азербайджане" in page and "Азербайджанские каналы" in page
+    popular, channels = page.split("Азербайджанские каналы")
+    assert "Мировой хит" in popular and "Xəbər buraxılışı" in channels and "Xəbər buraxılışı" not in popular

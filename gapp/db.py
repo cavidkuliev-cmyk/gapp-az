@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS videos (
     seen_at TEXT NOT NULL                -- когда ролик последний раз был в списке популярных
 );
 CREATE INDEX IF NOT EXISTS videos_published ON videos(published_at DESC);
+CREATE TABLE IF NOT EXISTS video_channels (
+    id TEXT PRIMARY KEY,                 -- идентификатор канала на YouTube (UC...)
+    title TEXT NOT NULL DEFAULT '',
+    origin TEXT NOT NULL,                -- seed: из video_channels.yaml, auto: найден в списке популярных
+    seed_name TEXT,                      -- имя из video_channels.yaml, по которому найден канал
+    enabled INTEGER NOT NULL DEFAULT 1,
+    added_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -110,6 +118,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
         # Ручные настройки из админки: NULL значит «как в sources.yaml».
         ("sources", "admin_active", "INTEGER"),
         ("sources", "admin_show_text", "INTEGER"),
+        # Откуда ролик: из списка популярных в регионе и/или со свежих загрузок азербайджанских каналов.
+        ("videos", "popular", "INTEGER NOT NULL DEFAULT 1"),
+        ("videos", "from_channel", "INTEGER NOT NULL DEFAULT 0"),
+        ("videos", "is_az", "INTEGER NOT NULL DEFAULT 0"),   # название или язык ролика азербайджанские
         # Сюжет скрыт с сайта вручную (админка).
         ("stories", "hidden", "INTEGER NOT NULL DEFAULT 0"),
     ):
