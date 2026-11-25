@@ -329,12 +329,13 @@ VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 def video_page(request: Request):
     """Популярные видео YouTube в Азербайджане за сутки. Один общий раздел, без деления по языкам."""
     with db.session() as conn:
-        rows = conn.execute(
-            "SELECT * FROM videos WHERE hidden = 0 AND published_at >= ? ORDER BY views DESC LIMIT ?",
-            (iso_ago(hours=config.VIDEO_WINDOW_HOURS), VIDEO_LIMIT),
-        ).fetchall()
+        since = iso_ago(hours=config.VIDEO_WINDOW_HOURS)
+        rows, from_channels = (conn.execute(
+            f"SELECT * FROM videos WHERE hidden = 0 AND {flag} = 1 AND published_at >= ? "
+            "ORDER BY views DESC LIMIT ?", (since, VIDEO_LIMIT)).fetchall()
+            for flag in ("popular", "from_channel"))
     return render(
-        request, "video.html", "ru", videos=rows, hours=config.VIDEO_WINDOW_HOURS,
+        request, "video.html", "ru", videos=rows, channel_videos=from_channels, hours=config.VIDEO_WINDOW_HOURS,
         title="Популярные видео Азербайджана за 24 часа | Gapp.az",
         description="Самые популярные ролики YouTube в Азербайджане за последние сутки: свежие видео по числу просмотров.",
         canonical="/video",

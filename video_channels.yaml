@@ -1,0 +1,27 @@
+# Азербайджанские каналы YouTube, чьи свежие ролики показываются на странице /video отдельным блоком.
+# Достаточно написать название канала так, как оно записано на YouTube: сборщик сам найдёт канал
+# (ищет канал с точно таким названием; ненайденные повторяются раз в неделю, см. журнал коллектора).
+# Кроме этого, в список автоматически попадают каналы азербайджанских роликов из списка популярных.
+channels:
+  - ANS TV
+  - Xəzər TV
+  - Space TV
+  - ATV Azad Azərbaycan
+  - İTV
+  - Lider TV
+  - CBC Azerbaijan
+  - Real TV
+  - Baku TV
+  - AzTV
+  - İdman Azərbaycan
+  - Report TV
+  - APA TV
+  - Trend
+  - Oxu.az
+  - Qafqazinfo
+  - Modern.az
+  - Lent.az
+  - Meydan TV
+  - Azadlıq Radiosu
+  - BBC News Azərbaycanca
+  - Sputnik Azərbaycan

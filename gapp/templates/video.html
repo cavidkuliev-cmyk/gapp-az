@@ -1,11 +1,7 @@
 {% extends "base.html" %}
-{% block content %}
-<main class="cols">
-<section class="feed" style="flex:1 1 100%" aria-label="Видео">
-<h1 class="tag gray">Популярные видео Азербайджана за {{ hours }} ч</h1>
-<p class="muted" style="margin:0 0 12px">Свежие ролики YouTube из списка популярных в Азербайджане, по числу просмотров. Обновляется раз в час.</p>
+{% macro cards(items, empty) %}
 <div class="vgrid">
-{% for v in videos %}
+{% for v in items %}
 <a class="vcard" href="/video/{{ v.id }}">
 <img src="https://i.ytimg.com/vi/{{ v.id }}/mqdefault.jpg" width="320" height="180" alt="" loading="lazy">
 {% if v.duration %}<span class="dur">{{ v.duration | duration_label }}</span>{% endif %}
@@ -13,9 +9,19 @@
 <span class="muted">{{ v.channel }} · {{ v.views | views_label }} · {{ v.published_at | ago_label }}</span>
 </a>
 {% else %}
-<p class="muted">Пока нет данных. Список появится после первого обновления.</p>
+<p class="muted">{{ empty }}</p>
 {% endfor %}
 </div>
+{% endmacro %}
+{% block content %}
+<main class="cols">
+<section class="feed" style="flex:1 1 100%" aria-label="Видео">
+<h1 class="tag gray">Популярное в Азербайджане за {{ hours }} ч</h1>
+<p class="muted" style="margin:0 0 12px">Свежие ролики YouTube из списка популярных в Азербайджане, по числу просмотров. Это то, что смотрят у нас, в том числе мировые хиты. Обновляется раз в час.</p>
+{{ cards(videos, "Пока нет данных. Список появится после первого обновления.") }}
+<h2 class="tag red" style="margin-top:28px">Азербайджанские каналы</h2>
+<p class="muted" style="margin:0 0 12px">Новые ролики азербайджанских каналов за {{ hours }} ч, по просмотрам.</p>
+{{ cards(channel_videos, "Пока нет роликов азербайджанских каналов за этот период.") }}
 </section>
 </main>
 {% endblock %}

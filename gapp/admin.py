@@ -143,7 +143,10 @@ def admin_home(request: Request, q: str = ""):
         hidden = conn.execute(
             "SELECT * FROM stories WHERE hidden = 1 ORDER BY last_at DESC LIMIT 50"
         ).fetchall()
-    return _page(request, "admin.html", stats=stats, stories=stories, hidden=hidden, q=q,
+        video_channels = conn.execute(
+            "SELECT c.*, (SELECT COUNT(*) FROM videos v WHERE v.channel_id = c.id) AS videos "
+            "FROM video_channels c ORDER BY c.origin, c.title COLLATE NOCASE LIMIT 300").fetchall()
+    return _page(request, "admin.html", stats=stats, stories=stories, hidden=hidden, q=q, video_channels=video_channels,
                  csrf=_csrf(session), switch_off=not config.SHOW_FULL_TEXT)
 
 
@@ -200,6 +203,18 @@ async def source_text(request: Request, source_id: int):
                      (value, value, source_id))
         conn.commit()
     return _redirect("/admin#sources")
+
+
+@router.post("/admin/videochannel/{channel_id}/{action}")
+async def video_channel_switch(request: Request, channel_id: str, action: str):
+    form = await _form(request)
+    _authorized(request, form)
+    if action not in ("on", "off") or not channel_id.startswith("UC"):
+        raise HTTPException(404)
+    with db.session() as conn:
+        conn.execute("UPDATE video_channels SET enabled = ? WHERE id = ?", (1 if action == "on" else 0, channel_id))
+        conn.commit()
+    return _redirect("/admin#channels")
 
 
 @router.post("/admin/story/{story_id}/{action}")

@@ -73,6 +73,26 @@ form{margin:0;display:inline}
 <p class="muted">Выключенный источник не собирается и пропадает со списка на сайте. Уже собранные новости остаются. Настройка действует сразу и сильнее файла sources.yaml.</p>
 </section>
 
+<section id="channels">
+<h2>Каналы YouTube для раздела «Видео»</h2>
+{% if video_channels %}
+<table>
+<tr><th>Канал</th><th>Откуда</th><th>Роликов в базе</th><th>Показ</th></tr>
+{% for c in video_channels %}
+<tr>
+<td><a href="https://www.youtube.com/channel/{{ c.id }}" rel="noopener noreferrer">{{ c.title or c.id }}</a></td>
+<td class="muted">{{ 'из списка' if c.origin == 'seed' else 'найден сам' }}</td>
+<td>{{ c.videos }}</td>
+<td><form method="post" action="/admin/videochannel/{{ c.id }}/{{ 'off' if c.enabled else 'on' }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+<span class="{{ 'on' if c.enabled else 'off' }}">{{ 'включён' if c.enabled else 'выключен' }}</span>
+<button type="submit">{{ 'Выключить' if c.enabled else 'Включить' }}</button></form></td>
+</tr>
+{% endfor %}
+</table>
+<p class="muted">Свежие ролики включённых каналов показываются в блоке «Азербайджанские каналы». Новые каналы добавляются в файле video_channels.yaml (по названию) и находятся сами среди азербайджанских роликов из списка популярных.</p>
+{% else %}<p class="muted">Каналов пока нет: они появятся после первого обновления раздела «Видео».</p>{% endif %}
+</section>
+
 <section id="stories">
 <h2>Новости</h2>
 <form class="search" method="get" action="/admin"><input name="q" value="{{ q }}" placeholder="Найти новость по заголовку (от 3 букв)"> <button type="submit">Найти</button></form>
