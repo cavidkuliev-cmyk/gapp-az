@@ -32,6 +32,15 @@ RUBRIC_NAMES = dict(RUBRICS)
 # Пароль админки (/admin). Пока не задан или короче 12 символов, админка выключена.
 ADMIN_PASSWORD = os.environ.get("GAPP_ADMIN_PASSWORD", "")
 
+# Раздел «Видео»: популярные ролики YouTube в стране. Без ключа API сбор выключен.
+# Ключ создаётся в Google Cloud (YouTube Data API v3) и вписывается в .env на сервере.
+YOUTUBE_API_KEY = os.environ.get("GAPP_YOUTUBE_API_KEY", "")
+VIDEO_REGION = os.environ.get("GAPP_VIDEO_REGION", "AZ")
+# Как часто обновлять список, минуты. Один запрос стоит 1 единицу из 10 000 в сутки.
+VIDEO_POLL_MINUTES = int(os.environ.get("GAPP_VIDEO_POLL_MINUTES", "60"))
+# В списке показываются ролики, опубликованные не раньше этого числа часов назад.
+VIDEO_WINDOW_HOURS = int(os.environ.get("GAPP_VIDEO_WINDOW_HOURS", "24"))
+
 # Показывать ли на страницах новостей полный текст, фото и видео. Общий выключатель;
 # отдельному источнику показ отключается в sources.yaml строкой `full_text: false`.
 SHOW_FULL_TEXT = os.environ.get("GAPP_SHOW_FULL_TEXT", "1") not in ("0", "false", "no", "")
@@ -68,7 +77,7 @@ I18N = {
         "html_lang": "ru", "locale": "ru_RU", "other": "az",
         "rubrics": RUBRICS, "rubric_names": RUBRIC_NAMES,
         # адреса разделов
-        "home": "/", "rubric": "/rubrika/", "story": "/novost/", "source": "/istochnik/", "search": "/poisk",
+        "video": "Видео", "home": "/", "rubric": "/rubrika/", "story": "/novost/", "source": "/istochnik/", "search": "/poisk",
         "about": "/o-proekte", "rss": "/rss.xml",
         # тексты
         "home_title": "Gapp.az: новости Азербайджана из всех изданий",
@@ -96,7 +105,7 @@ I18N = {
     "az": {
         "html_lang": "az", "locale": "az_AZ", "other": "ru",
         "rubrics": RUBRICS_AZ, "rubric_names": dict(RUBRICS_AZ),
-        "home": "/az", "rubric": "/az/rubrika/", "story": "/az/xeber/", "source": "/az/menbe/", "search": "/az/axtar",
+        "video": "Video", "home": "/az", "rubric": "/az/rubrika/", "story": "/az/xeber/", "source": "/az/menbe/", "search": "/az/axtar",
         "about": "/az/haqqinda", "rss": "/az/rss.xml",
         "home_title": "Gapp.az: bütün nəşrlərdən Azərbaycan xəbərləri",
         "home_desc": "Aparıcı nəşrlərdən ən son Azərbaycan xəbərləri bir lentdə.",

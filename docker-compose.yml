@@ -11,6 +11,8 @@ services:
     build: .
     restart: unless-stopped
     command: ["python", "-m", "gapp.collector"]
+    environment:
+      GAPP_YOUTUBE_API_KEY: ${GAPP_YOUTUBE_API_KEY:-}
     volumes:
       - data:/data
   caddy:

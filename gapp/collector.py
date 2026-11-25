@@ -13,7 +13,7 @@ import feedparser
 import httpx
 import yaml
 
-from . import config, db, scrape
+from . import config, db, scrape, videos
 from .textutil import (
     LANGS,
     canonical_url,
@@ -470,6 +470,10 @@ def collect_once(conn: sqlite3.Connection, client: httpx.Client | None = None) -
             time.sleep(1)  # вежливая пауза между запросами
         if config.FETCH_BODIES:
             stats.update(fill_bodies(conn, client, robots, now_utc()))
+        try:
+            stats.update(videos.collect_videos(conn, client, now_utc()))
+        except Exception:  # сбой раздела «Видео» не должен мешать сбору новостей
+            log.exception("сбор видео упал")
     finally:
         if own_client:
             client.close()
