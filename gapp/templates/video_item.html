@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="cols">
+<article class="story" style="flex:1 1 100%;max-width:900px">
+<p class="muted"><a href="/video" style="color:#1a5fd0">← Все популярные видео</a></p>
+<h1>{{ video.title }}</h1>
+<div class="full"><div class="video">
+<iframe src="https://www.youtube-nocookie.com/embed/{{ video.id }}" title="{{ video.title }}" loading="lazy" allowfullscreen
+ referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"></iframe>
+</div></div>
+<p class="muted">{{ video.channel }} · {{ video.views | views_label }} · {{ video.published_at | full_time }}</p>
+<p><a class="btn" style="display:inline-block;padding:10px 18px" href="https://www.youtube.com/watch?v={{ video.id }}" rel="noopener">Смотреть на YouTube</a></p>
+</article>
+</main>
+{% endblock %}

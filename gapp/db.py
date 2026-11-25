@@ -22,6 +22,23 @@ CREATE TABLE IF NOT EXISTS feeds (
     last_status TEXT,
     fail_count INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS videos (
+    id TEXT PRIMARY KEY,                 -- идентификатор ролика на YouTube
+    title TEXT NOT NULL,
+    channel TEXT NOT NULL DEFAULT '',
+    channel_id TEXT NOT NULL DEFAULT '',
+    published_at TEXT NOT NULL,
+    views INTEGER NOT NULL DEFAULT 0,
+    likes INTEGER NOT NULL DEFAULT 0,
+    duration INTEGER NOT NULL DEFAULT 0, -- секунды, 0 для прямых эфиров
+    hidden INTEGER NOT NULL DEFAULT 0,
+    seen_at TEXT NOT NULL                -- когда ролик последний раз был в списке популярных
+);
+CREATE INDEX IF NOT EXISTS videos_published ON videos(published_at DESC);
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS stories (
     id INTEGER PRIMARY KEY,
     slug TEXT NOT NULL,
